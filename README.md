@@ -144,6 +144,28 @@ npx http-server
 - **效能最佳化**：使用 WebAssembly 加速 AI 模型推論
 - **無障礙設計**：支援鍵盤操作和螢幕閱讀器
 
+## 🙏 致謝與參考資料
+
+本專案的實現得益於以下優秀的開源專案和技術文章：
+
+### 核心技術參考
+- **[Open Wake Word on the Web](https://deepcorelabs.com/open-wake-word-on-the-web/)** by Miro Hristov  
+  深度技術文章詳細解釋了如何將 Python 喚醒詞系統移植到瀏覽器端，包含關鍵的音訊處理管道架構和除錯經驗分享
+
+- **[VAD (Voice Activity Detection)](https://github.com/ricky0123/vad)**  
+  提供了瀏覽器端語音活動檢測的實現範例和最佳實踐
+
+- **[Web Speech API](https://www.google.com/intl/en/chrome/demos/speech.html)**  
+  Google Chrome 的官方語音識別 API 示範，為語音轉文字功能提供了實現基礎
+
+### 開源社群貢獻
+- **OpenWakeWord** - 提供高品質的喚醒詞檢測模型
+- **ONNX Runtime Web** - 使機器學習模型能在瀏覽器中高效運行
+- **Silero VAD** - 提供準確的語音活動檢測能力
+
+### 特別感謝
+感謝所有為語音處理、機器學習和 Web 技術發展做出貢獻的開發者和研究者們。沒有這些開源專案和詳細的技術分享，本專案將無法實現。
+
 ## 📄 授權條款
 
 本專案採用 MIT 授權條款，詳見 LICENSE 檔案。
