@@ -5,6 +5,18 @@
     box-sizing: border-box;
 }
 
+/* 移動設備優化 */
+html {
+    -webkit-text-size-adjust: 100%;
+    -webkit-tap-highlight-color: transparent;
+}
+
+body {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    touch-action: manipulation;
+}
+
 /* 深色模式變數 */
 :root {
     --bg-primary: #ffffff;
@@ -25,11 +37,18 @@
 /* 容器樣式 */
 .container {
     width: 100%;
-    height: 100vh;
+    min-height: 100vh;
     padding: 10px;
     display: flex;
     flex-direction: column;
-    overflow: hidden;
+}
+
+/* 桌面版保持原有固定高度 */
+@media (min-width: 1025px) {
+    .container {
+        height: 100vh;
+        overflow: hidden;
+    }
 }
 
 /* 載入畫面 */
@@ -154,6 +173,8 @@
     overflow: hidden;
     border: none;
     outline: none;
+    min-height: 44px; /* 符合觸控建議的最小尺寸 */
+    min-width: 44px;
 }
 
 .btn:disabled {
@@ -161,13 +182,44 @@
     cursor: not-allowed;
 }
 
+/* 觸控設備按鈕優化 */
+@media (pointer: coarse) {
+    .btn {
+        min-height: 48px;
+        min-width: 48px;
+        padding: 10px 16px;
+    }
+    
+    .btn-sm {
+        min-height: 40px;
+        min-width: 40px;
+        padding: 8px 12px;
+    }
+    
+    /* 增加觸控友好的間距 */
+    .control-group {
+        gap: 12px;
+    }
+    
+    .download-buttons {
+        gap: 12px;
+    }
+}
+
 /* 主要內容區 */
 .main-content {
     display: flex;
     gap: 12px;
     flex: 1;
-    min-height: 0;
-    height: calc(100vh - 110px);
+    min-height: 400px;
+}
+
+/* 桌面版固定高度 */
+@media (min-width: 1025px) {
+    .main-content {
+        min-height: 0;
+        height: calc(100vh - 110px);
+    }
 }
 
 /* 視覺化欄位 */
@@ -390,6 +442,8 @@ canvas {
 }
 
 /* 響應式設計 */
+
+/* 平板橫向 (1024px 以下) */
 @media (max-width: 1024px) {
     .control-status-row {
         flex-wrap: wrap;
@@ -398,13 +452,25 @@ canvas {
     
     .main-content {
         flex-direction: column;
+        gap: 16px;
     }
     
     .visualization-column {
         flex-direction: row;
+        min-height: 300px;
+    }
+    
+    .results-column {
+        min-height: 400px;
+    }
+    
+    /* 調整圖表容器高度 */
+    .chart-container {
+        min-height: 200px;
     }
 }
 
+/* 平板直向與小型平板 (768px 以下) */
 @media (max-width: 768px) {
     .container {
         padding: 8px;
@@ -413,17 +479,242 @@ canvas {
     .control-status-row {
         flex-direction: column;
         align-items: stretch;
-        gap: 10px;
+        gap: 12px;
+        padding: 12px;
     }
     
-    .control-group,
-    .status-group,
+    .control-group {
+        justify-content: center;
+        flex-wrap: wrap;
+    }
+    
+    .status-group {
+        justify-content: space-around;
+        flex-wrap: wrap;
+    }
+    
     .model-group {
         justify-content: center;
+        flex-wrap: wrap;
     }
     
     .visualization-column {
         flex-direction: column;
+        gap: 16px;
+    }
+    
+    .chart-container {
+        min-height: 180px;
+    }
+    
+    .results-column {
+        min-height: 300px;
+    }
+    
+    /* 標題適配 */
+    h1 {
+        font-size: 1.25rem !important;
+        text-align: center;
+    }
+    
+    /* 按鈕大小適配 */
+    .btn {
+        padding: 8px 12px !important;
+        font-size: 14px;
+    }
+    
+    .btn-sm {
+        padding: 6px 10px !important;
+        font-size: 12px;
+    }
+}
+
+/* 手機橫向 (640px 以下) */
+@media (max-width: 640px) {
+    .container {
+        padding: 6px;
+    }
+    
+    .header-section {
+        margin-bottom: 8px;
+    }
+    
+    .control-status-row {
+        padding: 8px;
+        gap: 10px;
+    }
+    
+    .main-content {
+        gap: 12px;
+    }
+    
+    .chart-container {
+        min-height: 150px;
+    }
+    
+    .results-column {
+        min-height: 250px;
+    }
+    
+    /* 下載按鈕區域優化 */
+    .download-buttons {
+        flex-wrap: wrap;
+        gap: 8px !important;
+    }
+    
+    .download-buttons .btn {
+        flex: 1;
+        min-width: 100px;
+    }
+}
+
+/* 手機直向 (480px 以下) */
+@media (max-width: 480px) {
+    .container {
+        padding: 4px;
+    }
+    
+    .control-status-row {
+        padding: 6px;
+    }
+    
+    .main-content {
+        gap: 10px;
+    }
+    
+    /* 更緊湊的控制按鈕 */
+    .control-group {
+        gap: 6px;
+    }
+    
+    .btn {
+        padding: 6px 10px !important;
+        font-size: 13px;
+    }
+    
+    .btn-sm {
+        padding: 4px 8px !important;
+        font-size: 11px;
+    }
+    
+    /* 狀態指示器調整 */
+    .status-group {
+        gap: 12px;
+    }
+    
+    .status-item {
+        font-size: 12px;
+    }
+    
+    /* 圖表區域最小化 */
+    .chart-container {
+        min-height: 120px;
+    }
+    
+    .chart-container h3 {
+        font-size: 14px;
+        margin-bottom: 8px;
+    }
+    
+    .results-column {
+        min-height: 200px;
+    }
+    
+    /* 轉譯項目緊湊化 */
+    .transcription-item {
+        padding: 8px;
+        margin-bottom: 6px;
+    }
+    
+    .transcription-item .timestamp {
+        font-size: 10px;
+    }
+    
+    .transcription-item .text {
+        font-size: 13px;
+        line-height: 1.4;
+    }
+    
+    .audio-controls {
+        top: 8px;
+        right: 8px;
+    }
+    
+    .play-btn {
+        padding: 3px 8px;
+        font-size: 11px;
+    }
+}
+
+/* 超小螢幕 (360px 以下) */
+@media (max-width: 360px) {
+    .container {
+        padding: 2px;
+    }
+    
+    h1 {
+        font-size: 1.1rem !important;
+    }
+    
+    .control-status-row {
+        padding: 4px;
+    }
+    
+    .btn {
+        padding: 4px 8px !important;
+        font-size: 12px;
+    }
+    
+    .chart-container {
+        min-height: 100px;
+    }
+    
+    .results-column {
+        min-height: 180px;
+    }
+    
+    .transcription-item {
+        padding: 6px;
+    }
+    
+    .transcription-item .text {
+        font-size: 12px;
+    }
+}
+
+/* iOS Safari 特殊優化 */
+@supports (-webkit-touch-callout: none) {
+    /* iOS Safari 視窗高度修正 */
+    .container {
+        min-height: -webkit-fill-available;
+    }
+    
+    /* 防止橡皮筋效果 */
+    body {
+        position: fixed;
+        overflow: hidden;
+        width: 100%;
+        height: 100%;
+    }
+    
+    /* 但在平板和手機上允許滾動 */
+    @media (max-width: 1024px) {
+        body {
+            position: static;
+            overflow: visible;
+            height: auto;
+        }
+    }
+    
+    /* iOS 輸入元素優化 */
+    input, select, button {
+        -webkit-appearance: none;
+        border-radius: 0;
+    }
+    
+    /* 防止縮放 */
+    input[type="file"] {
+        font-size: 16px;
     }
 }
 
