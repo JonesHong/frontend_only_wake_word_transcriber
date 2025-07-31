@@ -1,175 +1,175 @@
-# 🎙️ 多語言智能語音助理
+# 🎙️ Multilingual Smart Voice Assistant
 
-一個功能完整的純前端語音助理應用，整合喚醒詞偵測、語音活動偵測（VAD）、語音轉譯與智能介面設計。
+A feature-complete frontend-only voice assistant application that integrates wake word detection, voice activity detection (VAD), speech transcription, and intelligent interface design.
 
-## ✨ 功能特色
+## ✨ Features
 
-### 🔊 語音處理功能
-- **多喚醒詞模型**：支援 Hey Jarvis、Hey Mycroft、Alexa 三種喚醒詞
-- **智能語音偵測 (VAD)**：自動偵測語音活動，支援自動/手動結束模式
-- **即時語音轉譯**：使用 Web Speech API 將語音轉換為文字
-- **音訊回放功能**：錄製並可重播語音片段
+### 🔊 Speech Processing
+- **Multiple Wake Word Models**: Supports Hey Jarvis, Hey Mycroft, and Alexa wake words
+- **Intelligent Voice Activity Detection (VAD)**: Automatically detects voice activity with support for automatic/manual ending modes
+- **Real-time Speech Transcription**: Uses Web Speech API to convert speech to text
+- **Audio Playback**: Records and allows replaying of audio segments
 
-### 🎨 使用者介面
-- **雙語介面**：完整的繁體中文/英文多語言支援
-- **深色/淺色主題**：可切換的視覺主題
-- **即時視覺化**：音波圖、喚醒詞分數圖和 VAD 狀態顯示
-- **響應式設計**：支援桌面與行動裝置
+### 🎨 User Interface
+- **Bilingual Interface**: Complete Traditional Chinese/English multilingual support
+- **Dark/Light Theme**: Switchable visual themes
+- **Real-time Visualization**: Waveform charts, wake word score graphs, and VAD status display
+- **Responsive Design**: Supports desktop and mobile devices
 
-### ⚙️ 進階功能
-- **彈性設定系統**：可調整靜音超時、切換模型、設定偵測模式
-- **日誌記錄系統**：完整的系統活動記錄與除錯功能
-- **模組化架構**：基於有限狀態機（FSM）的系統狀態管理
-- **純前端實現**：無需後端服務，可直接部署到 GitHub Pages
+### ⚙️ Advanced Features
+- **Flexible Settings System**: Adjustable silence timeout, model switching, and detection mode configuration
+- **Logging System**: Complete system activity logging and debugging functionality
+- **Modular Architecture**: Finite State Machine (FSM) based system state management
+- **Pure Frontend Implementation**: No backend services required, deployable directly to GitHub Pages
 
-## 系統架構
+## System Architecture
 
-### 有限狀態機 (FSM)
+### Finite State Machine (FSM)
 
-應用使用三個狀態控制流程：
+The application uses three states to control the flow:
 
-1. **Initialization**：系統初始狀態
-2. **Idle**：等待喚醒詞觸發
-3. **Listening**：偵測到喚醒詞後，開始聆聽並轉譯語音
+1. **Initialization**: System initial state
+2. **Idle**: Waiting for wake word trigger
+3. **Listening**: After wake word detection, starts listening and transcribing speech
 
-### 狀態轉換
+### State Transitions
 
-- Initialization → Idle：按下「開始收音」
-- Idle → Listening：偵測到喚醒詞
-- Listening → Idle：連續 3 秒無語音活動
-- 任何狀態 → Initialization：按下「停止收音」
+- Initialization → Idle: Press "Start Recording"
+- Idle → Listening: Wake word detected
+- Listening → Idle: No voice activity for 3 consecutive seconds
+- Any State → Initialization: Press "Stop Recording"
 
-## 🚀 使用方式
+## 🚀 Usage
 
-### 基本操作
-1. 在支援的瀏覽器中開啟 `index.html`（建議使用 Chrome 或 Edge）
-2. 允許麥克風權限
-3. 點擊「▶️ 開始」按鈕啟動系統
-4. 說出喚醒詞（Hey Jarvis、Hey Mycroft、Alexa）
-5. 偵測到喚醒詞後，系統會播放提示音並開始聆聽
-6. 開始說話，系統會即時轉譯您的語音並顯示結果
-7. 語音結束後系統會自動返回等待狀態
+### Basic Operations
+1. Open `index.html` in a supported browser (Chrome or Edge recommended)
+2. Allow microphone permissions
+3. Click the "▶️ Start" button to activate the system
+4. Say a wake word (Hey Jarvis, Hey Mycroft, Alexa)
+5. After wake word detection, the system will play a notification sound and start listening
+6. Start speaking, the system will transcribe your speech in real-time and display results
+7. The system automatically returns to waiting state after speech ends
 
-### 進階設定
-- **設定按鈕**：點擊右下角齒輪圖標開啟設定面板
-  - 切換手動/自動結束模式
-  - 調整靜音超時時間（0.5-5.0秒）
-  - 選擇不同的喚醒詞模型
-- **主題切換**：點擊 🌓 按鈕切換深色/淺色主題
-- **語言切換**：使用下拉選單切換繁體中文/英文介面
-- **日誌查看**：點擊右下角 📋 按鈕查看系統日誌
+### Advanced Settings
+- **Settings Button**: Click the gear icon in the bottom right to open the settings panel
+  - Switch between manual/automatic ending modes
+  - Adjust silence timeout (0.5-5.0 seconds)
+  - Select different wake word models
+- **Theme Toggle**: Click the 🌓 button to switch between dark/light themes
+- **Language Switch**: Use the dropdown menu to switch between Traditional Chinese/English interface
+- **Log Viewing**: Click the 📋 button in the bottom right to view system logs
 
-## 技術規格
+## Technical Specifications
 
-- **音訊採樣率**：16kHz
-- **音訊處理**：80ms 音訊塊 (1280 samples)
-- **VAD 延遲**：12 幀緩衝避免過早切斷
-- **喚醒詞閾值**：0.5
+- **Audio Sample Rate**: 16kHz
+- **Audio Processing**: 80ms audio chunks (1280 samples)
+- **VAD Delay**: 12-frame buffer to prevent premature cutoff
+- **Wake Word Threshold**: 0.5
 
-## 📁 專案結構
+## 📁 Project Structure
 
 ```
 voice-assistant/
-├── index.html          # 主要 HTML 頁面
-├── styles.css          # CSS 樣式檔案
-├── js/                 # JavaScript 模組
-│   ├── main.js         # 主程式與應用初始化
-│   ├── fsm.js          # 有限狀態機邏輯
-│   ├── wakeword.js     # 喚醒詞偵測模組
-│   ├── vad.js          # 語音活動偵測模組
-│   ├── speech.js       # 語音轉譯模組
-│   ├── visualization.js # 音訊視覺化圖表
-│   ├── settings.js     # 設定系統與 UI
-│   ├── logger.js       # 日誌記錄系統
-│   ├── theme.js        # 主題切換管理
-│   ├── i18n.js         # 多語言國際化
-│   └── language.js     # 語言切換邏輯
-├── models/             # ONNX 模型檔案
-│   ├── hey_jarvis_v0.1.onnx     # Hey Jarvis 喚醒詞模型
-│   ├── hey_mycroft_v0.1.onnx    # Hey Mycroft 喚醒詞模型
-│   ├── alexa_v0.1.onnx          # Alexa 喚醒詞模型
-│   ├── embedding_model.onnx     # 音訊特徵提取模型
-│   ├── melspectrogram.onnx      # 頻譜圖轉換模型
-│   └── silero_vad.onnx          # VAD 偵測模型
-└── reference/          # 參考資料與範例程式碼
+├── index.html          # Main HTML page
+├── styles.css          # CSS stylesheet
+├── js/                 # JavaScript modules
+│   ├── main.js         # Main program and application initialization
+│   ├── fsm.js          # Finite state machine logic
+│   ├── wakeword.js     # Wake word detection module
+│   ├── vad.js          # Voice activity detection module
+│   ├── speech.js       # Speech transcription module
+│   ├── visualization.js # Audio visualization charts
+│   ├── settings.js     # Settings system and UI
+│   ├── logger.js       # Logging system
+│   ├── theme.js        # Theme switching management
+│   ├── i18n.js         # Multilingual internationalization
+│   └── language.js     # Language switching logic
+├── models/             # ONNX model files
+│   ├── hey_jarvis_v0.1.onnx     # Hey Jarvis wake word model
+│   ├── hey_mycroft_v0.1.onnx    # Hey Mycroft wake word model
+│   ├── alexa_v0.1.onnx          # Alexa wake word model
+│   ├── embedding_model.onnx     # Audio feature extraction model
+│   ├── melspectrogram.onnx      # Spectrogram conversion model
+│   └── silero_vad.onnx          # VAD detection model
+└── reference/          # Reference materials and example code
 ```
 
-## 🌐 部署方式
+## 🌐 Deployment
 
-### GitHub Pages 部署
-1. Fork 或 Clone 此專案到你的 GitHub 帳號
-2. 在 GitHub 倉庫設定 → Pages → Source 選擇 "Deploy from a branch"
-3. 選擇 main 分支
-4. 等待部署完成，即可透過 GitHub Pages URL 存取
+### GitHub Pages Deployment
+1. Fork or Clone this project to your GitHub account
+2. In GitHub repository settings → Pages → Source, select "Deploy from a branch"
+3. Choose the main branch
+4. Wait for deployment to complete, then access via GitHub Pages URL
 
-### 本地運行
-由於瀏覽器安全限制，建議使用 HTTP 伺服器：
+### Local Development
+Due to browser security restrictions, it's recommended to use an HTTP server:
 ```bash
-# 使用 Python 3
+# Using Python 3
 python -m http.server 8000
 
-# 使用 Node.js http-server
+# Using Node.js http-server
 npx http-server
 
-# 或使用 Live Server 擴充功能（VS Code）
+# Or use Live Server extension (VS Code)
 ```
 
-## 🖥️ 瀏覽器相容性
+## 🖥️ Browser Compatibility
 
-| 瀏覽器 | 支援程度 | 備註 |
-|--------|----------|------|
-| Chrome | ✅ 完整支援 | 建議使用，所有功能完整 |
-| Edge | ✅ 完整支援 | 基於 Chromium，功能完整 |
-| Firefox | ⚠️ 部分支援 | Web Speech API 功能有限 |
-| Safari | ⚠️ 部分支援 | 某些 WebRTC 功能可能受限 |
+| Browser | Support Level | Notes |
+|---------|---------------|-------|
+| Chrome | ✅ Full Support | Recommended, all features complete |
+| Edge | ✅ Full Support | Chromium-based, full functionality |
+| Firefox | ⚠️ Partial Support | Limited Web Speech API functionality |
+| Safari | ⚠️ Partial Support | Some WebRTC features may be restricted |
 
-## ⚠️ 注意事項
+## ⚠️ Important Notes
 
-### 必要條件
-- **麥克風權限**：應用需要麥克風存取權限
-- **HTTPS 協定**：某些瀏覽器 API 需要安全連線
-- **WebAssembly 支援**：ONNX Runtime 需要 WASM 支援
-- **網路連線**：Web Speech API 需要網路連線
+### Requirements
+- **Microphone Permission**: Application requires microphone access
+- **HTTPS Protocol**: Some browser APIs require secure connections
+- **WebAssembly Support**: ONNX Runtime requires WASM support
+- **Network Connection**: Web Speech API requires internet connectivity
 
-### 使用建議
-- 建議在安靜環境使用以獲得最佳喚醒詞偵測效果
-- 說話時保持適當音量和清晰度
-- 如遇到問題，可查看日誌系統了解詳細資訊
+### Usage Recommendations
+- Use in quiet environments for optimal wake word detection
+- Maintain appropriate volume and clarity when speaking
+- Check the logging system for detailed information if issues occur
 
-## 🛠️ 技術特色
+## 🛠️ Technical Highlights
 
-- **純前端實現**：無需後端服務，完全在瀏覽器端運行
-- **模組化設計**：每個功能模組獨立，易於維護和擴展
-- **狀態管理**：使用有限狀態機確保系統行為一致性
-- **效能最佳化**：使用 WebAssembly 加速 AI 模型推論
-- **無障礙設計**：支援鍵盤操作和螢幕閱讀器
+- **Pure Frontend Implementation**: No backend services required, runs entirely in the browser
+- **Modular Design**: Each functional module is independent, easy to maintain and extend
+- **State Management**: Uses finite state machine to ensure consistent system behavior
+- **Performance Optimization**: Uses WebAssembly to accelerate AI model inference
+- **Accessibility Design**: Supports keyboard navigation and screen readers
 
-## 🙏 致謝與參考資料
+## 🙏 Acknowledgments and References
 
-本專案的實現得益於以下優秀的開源專案和技術文章：
+This project's implementation benefits from the following excellent open-source projects and technical articles:
 
-### 核心技術參考
+### Core Technical References
 - **[Open Wake Word on the Web](https://deepcorelabs.com/open-wake-word-on-the-web/)** by Miro Hristov  
-  深度技術文章詳細解釋了如何將 Python 喚醒詞系統移植到瀏覽器端，包含關鍵的音訊處理管道架構和除錯經驗分享
+  In-depth technical article detailing how to port a Python wake word system to the browser, including key audio processing pipeline architecture and debugging experience
 
 - **[VAD (Voice Activity Detection)](https://github.com/ricky0123/vad)**  
-  提供了瀏覽器端語音活動檢測的實現範例和最佳實踐
+  Provides browser-based voice activity detection implementation examples and best practices
 
 - **[Web Speech API](https://www.google.com/intl/en/chrome/demos/speech.html)**  
-  Google Chrome 的官方語音識別 API 示範，為語音轉文字功能提供了實現基礎
+  Google Chrome's official speech recognition API demonstration, providing the foundation for speech-to-text functionality
 
-### 開源社群貢獻
-- **OpenWakeWord** - 提供高品質的喚醒詞檢測模型
-- **ONNX Runtime Web** - 使機器學習模型能在瀏覽器中高效運行
-- **Silero VAD** - 提供準確的語音活動檢測能力
+### Open Source Community Contributions
+- **OpenWakeWord** - Provides high-quality wake word detection models
+- **ONNX Runtime Web** - Enables efficient machine learning model execution in browsers
+- **Silero VAD** - Provides accurate voice activity detection capabilities
 
-### 特別感謝
-感謝所有為語音處理、機器學習和 Web 技術發展做出貢獻的開發者和研究者們。沒有這些開源專案和詳細的技術分享，本專案將無法實現。
+### Special Thanks
+Thanks to all developers and researchers who have contributed to the development of speech processing, machine learning, and web technologies. Without these open-source projects and detailed technical sharing, this project would not have been possible.
 
-## 📄 授權條款
+## 📄 License
 
-本專案採用 MIT 授權條款，詳見 LICENSE 檔案。
+This project is licensed under the MIT License. See the LICENSE file for details.
 
 ---
 
-**🤝 貢獻歡迎！** 如果你有任何建議或發現問題，歡迎提交 Issue 或 Pull Request。
+**🤝 Contributions Welcome!** If you have any suggestions or find issues, please feel free to submit an Issue or Pull Request.
