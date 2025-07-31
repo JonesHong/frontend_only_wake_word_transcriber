@@ -12,8 +12,7 @@ class WakeWordDetector {
         this.availableModels = {
             'hey_jarvis': 'models/hey_jarvis_v0.1.onnx',
             'alexa': 'models/alexa_v0.1.onnx',
-            'hey_mycroft': 'models/hey_mycroft_v0.1.onnx',
-            'hi_kmu': 'models/hi_kmu_0721.onnx'
+            'hey_mycroft': 'models/hey_mycroft_v0.1.onnx'
         };
         this.currentModelKey = 'hey_jarvis';
         this.loadedModels = {}; // 快取已載入的模型
@@ -415,8 +414,7 @@ if (window.settingsManager) {
             const modelMap = {
                 'hey_jarvis': 'hey_jarvis',
                 'hey_mycroft': 'hey_mycroft',
-                'alexa': 'alexa',
-                'hi_kmu': 'hi_kmu'
+                'alexa': 'alexa'
             };
             
             const modelKey = modelMap[value] || 'hey_jarvis';

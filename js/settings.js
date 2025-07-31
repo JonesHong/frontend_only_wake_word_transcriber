@@ -133,7 +133,7 @@ class SettingsManager {
                 return typeof value === 'number' && value >= 0.5 && value <= 5.0;
                 
             case 'wakewordModel':
-                return ['hey_jarvis', 'hey_mycroft', 'alexa', 'hi_kmu'].includes(value);
+                return ['hey_jarvis', 'hey_mycroft', 'alexa'].includes(value);
                 
             default:
                 return false;
@@ -170,8 +170,7 @@ class SettingsManager {
         return [
             { value: 'hey_jarvis', name: 'Hey Jarvis', file: 'models/hey_jarvis_v0.1.onnx' },
             { value: 'hey_mycroft', name: 'Hey Mycroft', file: 'models/hey_mycroft_v0.1.onnx' },
-            { value: 'alexa', name: 'Alexa', file: 'models/alexa_v0.1.onnx' },
-            { value: 'hi_kmu', name: '嗨高醫', file: 'models/hi_kmu_0721.onnx' },
+            { value: 'alexa', name: 'Alexa', file: 'models/alexa_v0.1.onnx' }
         ];
     }
 }
@@ -364,7 +363,6 @@ class SettingsUI {
                         <option value="hey_jarvis">Hey Jarvis</option>
                         <option value="hey_mycroft">Hey Mycroft</option>
                         <option value="alexa">Alexa</option>
-                        <option value="hi_kmu">嗨高醫</option>
                     </select>
                 </div>
                 
