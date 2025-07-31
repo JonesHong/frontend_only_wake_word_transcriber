@@ -22,6 +22,13 @@ class VoiceAssistantApp {
         this.transcriptionResults = null;
         this.manualListenBtn = null;
         this.endListeningBtn = null;
+        this.downloadTextBtn = null;
+        this.downloadAudioBtn = null;
+        
+        // 語音記錄
+        this.transcriptionHistory = [];
+        this.audioRecordings = [];
+        this.totalDurationMs = 0; // 累計時間（毫秒）
     }
     
     async initialize() {
@@ -39,6 +46,8 @@ class VoiceAssistantApp {
         this.transcriptionResults = document.getElementById('transcriptionResults');
         this.manualListenBtn = document.getElementById('manualListenBtn');
         this.endListeningBtn = document.getElementById('endListeningBtn');
+        this.downloadTextBtn = document.getElementById('downloadTextBtn');
+        this.downloadAudioBtn = document.getElementById('downloadAudioBtn');
         
         const loadingOverlay = document.getElementById('loadingOverlay');
         const loadingText = document.getElementById('loadingText');
@@ -160,6 +169,10 @@ class VoiceAssistantApp {
         this.endListeningBtn.addEventListener('click', () => {
             window.voiceAssistantFSM.manualStopListening();
         });
+        
+        // 下載按鈕
+        this.downloadTextBtn.addEventListener('click', () => this.downloadTranscriptionText());
+        this.downloadAudioBtn.addEventListener('click', () => this.downloadAllAudio());
         
         // 監聽設定變更以更新按鈕顯示
         if (window.settingsManager) {
@@ -397,6 +410,40 @@ class VoiceAssistantApp {
     addTranscriptionToResults(text, timestamp, audioUrl) {
         if (!text || text.trim() === '') return;
         
+        // 估算語音時長（基於文字長度，平均每秒3-4個字）
+        const estimatedDurationMs = Math.max(2000, text.trim().length * 200); // 最少2秒
+        const startTimeMs = this.totalDurationMs;
+        const endTimeMs = this.totalDurationMs + estimatedDurationMs;
+        
+        // 記錄到歷史
+        const transcriptionRecord = {
+            text: text.trim(),
+            timestamp: timestamp,
+            audioUrl: audioUrl,
+            startTimeMs: startTimeMs,
+            endTimeMs: endTimeMs,
+            durationMs: estimatedDurationMs
+        };
+        this.transcriptionHistory.push(transcriptionRecord);
+        
+        // 更新累計時間
+        this.totalDurationMs = endTimeMs;
+        
+        // 如果有音訊，記錄到音訊列表
+        if (audioUrl) {
+            this.audioRecordings.push({
+                url: audioUrl,
+                timestamp: timestamp,
+                text: text.trim(),
+                startTimeMs: startTimeMs,
+                endTimeMs: endTimeMs,
+                durationMs: estimatedDurationMs
+            });
+        }
+        
+        // 更新下載按鈕狀態
+        this.updateDownloadButtons();
+        
         // 移除佔位符
         const placeholder = this.transcriptionResults.querySelector('.placeholder');
         if (placeholder) {
@@ -587,6 +634,116 @@ class VoiceAssistantApp {
         if (modelInfo) {
             this.modelName.textContent = modelInfo.file.replace('models/', '');
         }
+    }
+    
+    // 更新下載按鈕狀態
+    updateDownloadButtons() {
+        if (this.downloadTextBtn) {
+            this.downloadTextBtn.disabled = this.transcriptionHistory.length === 0;
+        }
+        if (this.downloadAudioBtn) {
+            this.downloadAudioBtn.disabled = this.audioRecordings.length === 0;
+        }
+    }
+    
+    // 下載轉譯文字（Whisper 格式）
+    downloadTranscriptionText() {
+        if (this.transcriptionHistory.length === 0) {
+            alert('沒有可下載的轉譯記錄');
+            return;
+        }
+        
+        // 依記錄順序排序（不需要重新排序，因為已經是按順序記錄的）
+        const sortedHistory = [...this.transcriptionHistory];
+        
+        // 生成 Whisper 格式文字
+        const whisperFormat = sortedHistory.map((record) => {
+            const startTime = this.formatTimestampFromMs(record.startTimeMs);
+            const endTime = this.formatTimestampFromMs(record.endTimeMs);
+            return `[${startTime} --> ${endTime}] ${record.text}`;
+        }).join('\n');
+        
+        // 創建並下載文件
+        const blob = new Blob([whisperFormat], { type: 'text/plain;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `transcription_${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.txt`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    }
+    
+    // 下載所有語音檔案
+    async downloadAllAudio() {
+        if (this.audioRecordings.length === 0) {
+            alert('沒有可下載的語音記錄');
+            return;
+        }
+        
+        try {
+            // 使用 JSZip 來打包所有音訊文件（如果可用）
+            if (typeof JSZip !== 'undefined') {
+                const zip = new JSZip();
+                
+                for (let i = 0; i < this.audioRecordings.length; i++) {
+                    const recording = this.audioRecordings[i];
+                    const response = await fetch(recording.url);
+                    const audioBlob = await response.blob();
+                    const filename = `audio_${i + 1}_${recording.timestamp.toISOString().slice(0, 19).replace(/:/g, '-')}.wav`;
+                    zip.file(filename, audioBlob);
+                }
+                
+                const content = await zip.generateAsync({ type: 'blob' });
+                const url = URL.createObjectURL(content);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `voice_recordings_${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.zip`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            } else {
+                // 如果沒有 JSZip，逐個下載
+                for (let i = 0; i < this.audioRecordings.length; i++) {
+                    const recording = this.audioRecordings[i];
+                    const a = document.createElement('a');
+                    a.href = recording.url;
+                    a.download = `audio_${i + 1}_${recording.timestamp.toISOString().slice(0, 19).replace(/:/g, '-')}.wav`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    
+                    // 添加延遲避免瀏覽器阻擋多個下載
+                    if (i < this.audioRecordings.length - 1) {
+                        await new Promise(resolve => setTimeout(resolve, 1000));
+                    }
+                }
+            }
+        } catch (error) {
+            console.error('下載音訊檔案時發生錯誤:', error);
+            alert('下載失敗: ' + error.message);
+        }
+    }
+    
+    // 格式化時間戳記為 Whisper 格式 (HH:MM:SS.mmm)
+    formatTimestamp(date) {
+        const hours = date.getHours().toString().padStart(2, '0');
+        const minutes = date.getMinutes().toString().padStart(2, '0');
+        const seconds = date.getSeconds().toString().padStart(2, '0');
+        const milliseconds = date.getMilliseconds().toString().padStart(3, '0');
+        return `${hours}:${minutes}:${seconds}.${milliseconds}`;
+    }
+    
+    // 從毫秒格式化時間戳記為 Whisper 格式 (HH:MM:SS.mmm)
+    formatTimestampFromMs(totalMs) {
+        const hours = Math.floor(totalMs / 3600000);
+        const minutes = Math.floor((totalMs % 3600000) / 60000);
+        const seconds = Math.floor((totalMs % 60000) / 1000);
+        const milliseconds = totalMs % 1000;
+        
+        return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}.${milliseconds.toString().padStart(3, '0')}`;
     }
 }
 

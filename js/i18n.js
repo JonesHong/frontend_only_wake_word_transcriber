@@ -87,6 +87,8 @@ class I18nManager {
                 // 新增的UI按鈕
                 'ui.manualListen': '手動聆聽',
                 'ui.endListening': '結束聆聽',
+                'ui.downloadText': '下載文字',
+                'ui.downloadAudio': '下載語音',
             },
             'en': {
                 // System states
@@ -165,6 +167,8 @@ class I18nManager {
                 // New UI buttons
                 'ui.manualListen': 'Manual Listen',
                 'ui.endListening': 'End Listening',
+                'ui.downloadText': 'Download Text',
+                'ui.downloadAudio': 'Download Audio',
             },
             'ja': {
                 // システム状態
@@ -243,6 +247,8 @@ class I18nManager {
                 // 新しいUIボタン
                 'ui.manualListen': '手動リスニング',
                 'ui.endListening': 'リスニング終了',
+                'ui.downloadText': 'テキストダウンロード',
+                'ui.downloadAudio': '音声ダウンロード',
             }
         };
     }

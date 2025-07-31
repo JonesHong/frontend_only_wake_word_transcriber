@@ -118,7 +118,17 @@
 
             <!-- 右側轉譯結果 -->
             <div class="results-column bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-xl shadow-lg border border-white/20 dark:border-gray-700/30 p-4">
-                <h3 class="text-gray-700 dark:text-gray-300 font-semibold mb-3"><i class="fas fa-comment-dots mr-2 text-green-500 dark:text-green-400"></i><span data-i18n="ui.transcriptionResults">語音轉譯結果</span></h3>
+                <div class="flex items-center justify-between mb-3">
+                    <h3 class="text-gray-700 dark:text-gray-300 font-semibold"><i class="fas fa-comment-dots mr-2 text-green-500 dark:text-green-400"></i><span data-i18n="ui.transcriptionResults">語音轉譯結果</span></h3>
+                    <div class="download-buttons flex gap-2">
+                        <button id="downloadTextBtn" class="btn btn-sm bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white px-3 py-1 rounded-lg shadow-sm transition-all duration-200 hover:shadow-md text-sm" disabled>
+                            <i class="fas fa-download mr-1"></i><span data-i18n="ui.downloadText">下載文字</span>
+                        </button>
+                        <button id="downloadAudioBtn" class="btn btn-sm bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white px-3 py-1 rounded-lg shadow-sm transition-all duration-200 hover:shadow-md text-sm" disabled>
+                            <i class="fas fa-file-audio mr-1"></i><span data-i18n="ui.downloadAudio">下載語音</span>
+                        </button>
+                    </div>
+                </div>
                 <div id="transcriptionResults" class="results-container bg-gray-50 dark:bg-gray-900/50 rounded-lg">
                     <p class="placeholder text-gray-500 dark:text-gray-400 text-center py-8"><i class="fas fa-microphone-slash mr-2"></i><span data-i18n="ui.waitingForInput">等待語音輸入...</span></p>
                 </div>
@@ -128,6 +138,7 @@
 
     <!-- 載入必要的函式庫 -->
     <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
     <script src="js/i18n.js"></script>
     <script src="js/theme.js"></script>
     <script src="js/logger.js"></script>
