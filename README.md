@@ -2,6 +2,8 @@
 
 A feature-complete frontend-only voice assistant application that integrates wake word detection, voice activity detection (VAD), speech transcription, and intelligent interface design.
 
+🌐 **[Live Demo](https://joneshong.github.io/frontend_only_wake_word_transcriber/)**
+
 ## ✨ Features
 
 ### 🔊 Speech Processing

@@ -2,6 +2,8 @@
 
 一個功能完整的純前端語音助理應用，整合喚醒詞偵測、語音活動偵測（VAD）、語音轉譯與智能介面設計。
 
+🌐 **[線上演示](https://joneshong.github.io/frontend_only_wake_word_transcriber/)**
+
 ## ✨ 功能特色
 
 ### 🔊 語音處理功能
