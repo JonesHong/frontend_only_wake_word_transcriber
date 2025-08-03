@@ -8,7 +8,7 @@ class VoiceAssistantApp {
         
         // 音訊處理參數
         this.sampleRate = 16000;
-        this.frameSize = 1280; // 80ms chunks
+        this.frameSize = 1280; // 80ms chunks - 喚醒詞模型需要此大小
         
         // 音訊緩衝區
         this.currentAudioBuffer = [];
@@ -322,8 +322,6 @@ class VoiceAssistantApp {
                 if (currentState === 'Listening') {
                     // 在 Listening 狀態執行 VAD 並收集音訊
                     this.currentAudioBuffer.push(audioData.slice());
-                    // 即時更新語音轉譯器的音訊緩衝區
-                    window.speechTranscriber.setAudioBuffer(this.currentAudioBuffer);
                     
                     // 總是處理 VAD（自動模式用於結束，手動模式用於分段）
                     await window.voiceActivityDetector.processAudioChunk(audioData);
@@ -355,15 +353,22 @@ class VoiceAssistantApp {
                 // 如果從 Listening 狀態返回，播放結束音效
                 if (oldState === 'Listening') {
                     this.playEndSound();
+                    
+                    // 設定音訊緩衝區供保存用
+                    if (this.currentAudioBuffer.length > 0) {
+                        window.speechTranscriber.setAudioBuffer(this.currentAudioBuffer);
+                        this.currentAudioBuffer = [];
+                    }
+                    
+                    // 清除臨時顯示框
+                    const interimDiv = document.getElementById('interimTranscription');
+                    if (interimDiv) {
+                        interimDiv.remove();
+                    }
                 }
                 
-                // 先設定音訊緩衝區，再停止語音轉譯
-                if (this.currentAudioBuffer.length > 0) {
-                    window.speechTranscriber.setAudioBuffer(this.currentAudioBuffer);
-                    this.currentAudioBuffer = [];
-                }
                 // 停止語音轉譯
-                window.speechTranscriber.pause();
+                window.speechTranscriber.stop();
                 // 清理喚醒詞偵測器的緩衝區以快速重置分數
                 window.wakewordDetector.resetBuffers();
                 break;
@@ -398,13 +403,129 @@ class VoiceAssistantApp {
     }
     
     handleTranscription(result) {
-        if (result.completed) {
-            // 完成的轉譯結果
-            this.addTranscriptionToResults(result.final, result.timestamp, result.audioUrl);
-        } else if (result.interim || result.final) {
-            // 即時顯示（可選）
-            // 這裡可以顯示即時轉譯結果
+        if (result.clearInterim) {
+            // 清除臨時顯示
+            const interimDiv = document.getElementById('interimTranscription');
+            if (interimDiv) {
+                interimDiv.remove();
+            }
+            return;
         }
+        
+        if (result.finalizeSession) {
+            // 會話結束，合併所有內容為一個完整項目
+            this.finalizeTranscriptionSession(result);
+            return;
+        }
+        
+        if (result.interim) {
+            // 只更新臨時顯示區域
+            this.updateInterimTranscription(result.interim);
+        } else if (result.final) {
+            // 更新完整的轉譯內容到臨時區域
+            this.updateInterimTranscription(result.final);
+        }
+    }
+    
+    // 更新即時轉譯（臨時結果）
+    updateInterimTranscription(text) {
+        if (!text) return;
+        
+        // 查找或建立臨時顯示區域
+        let interimDiv = document.getElementById('interimTranscription');
+        if (!interimDiv) {
+            interimDiv = document.createElement('div');
+            interimDiv.id = 'interimTranscription';
+            interimDiv.className = 'interim-transcription';
+            this.transcriptionResults.insertBefore(interimDiv, this.transcriptionResults.firstChild);
+        }
+        
+        interimDiv.textContent = text;
+    }
+    
+    // 移除不再需要的方法
+    
+    // 完成會話，建立完整的轉譯項目
+    finalizeTranscriptionSession(result) {
+        const { sessionId, fullText, audioUrl, timestamp } = result;
+        
+        if (!fullText || fullText.trim() === '') return;
+        
+        // 清除臨時顯示
+        const interimDiv = document.getElementById('interimTranscription');
+        if (interimDiv) {
+            interimDiv.remove();
+        }
+        
+        // 建立最終的轉譯項目（包含音訊）
+        this.addTranscriptionToResults(fullText, timestamp, audioUrl);
+    }
+    
+    // 更新串流轉譯（即時最終結果）
+    updateStreamingTranscription(text, timestamp) {
+        // 移除此方法，不再需要
+    }
+    
+    // 更新最後一個轉譯項目的音訊
+    updateLastTranscriptionAudio(audioUrl, fullText) {
+        if (!audioUrl) return;
+        
+        // 找到所有匹配全文的轉譯項目
+        const items = this.transcriptionResults.querySelectorAll('.transcription-item');
+        
+        for (let item of items) {
+            const textDiv = item.querySelector('.text');
+            if (textDiv && fullText.includes(textDiv.textContent)) {
+                // 檢查是否已有音訊控制
+                let audioControls = item.querySelector('.audio-controls');
+                if (!audioControls) {
+                    // 加入音訊控制
+                    audioControls = document.createElement('div');
+                    audioControls.className = 'audio-controls';
+                    
+                    const audio = document.createElement('audio');
+                    audio.src = audioUrl;
+                    audio.style.display = 'none';
+                    
+                    const playBtn = document.createElement('button');
+                    playBtn.className = 'play-btn';
+                    playBtn.innerHTML = '<i class="fas fa-play"></i>';
+                    playBtn.onclick = () => {
+                        if (audio.paused) {
+                            audio.play();
+                            playBtn.innerHTML = '<i class="fas fa-pause"></i>';
+                        } else {
+                            audio.pause();
+                            playBtn.innerHTML = '<i class="fas fa-play"></i>';
+                        }
+                    };
+                    
+                    audio.onended = () => {
+                        playBtn.innerHTML = '<i class="fas fa-play"></i>';
+                    };
+                    
+                    audioControls.appendChild(playBtn);
+                    audioControls.appendChild(audio);
+                    item.appendChild(audioControls);
+                    
+                    // 同時更新記錄
+                    const existingRecord = this.audioRecordings.find(r => fullText.includes(r.text));
+                    if (!existingRecord) {
+                        this.audioRecordings.push({
+                            url: audioUrl,
+                            timestamp: new Date(),
+                            text: fullText,
+                            startTimeMs: this.totalDurationMs,
+                            endTimeMs: this.totalDurationMs + 3000,
+                            durationMs: 3000
+                        });
+                    }
+                }
+            }
+        }
+        
+        // 更新下載按鈕狀態
+        this.updateDownloadButtons();
     }
     
     addTranscriptionToResults(text, timestamp, audioUrl) {

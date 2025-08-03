@@ -7,6 +7,7 @@ class SpeechTranscriber {
         this.utteranceBuffer = [];
         this.currentTranscript = '';
         this.currentAudioBuffer = [];
+        this.sessionId = null; // 當前聆聽會話 ID
         
         // 檢查瀏覽器支援
         this.isSupported = this.checkBrowserSupport();
@@ -52,6 +53,8 @@ class SpeechTranscriber {
         this.recognition.onstart = () => {
             console.log('語音識別已開始');
             this.isListening = true;
+            this.sessionId = Date.now(); // 新的會話 ID
+            this.currentTranscript = ''; // 重置當前轉譯
         };
         
         // 結束事件
@@ -59,11 +62,35 @@ class SpeechTranscriber {
             console.log('語音識別已結束');
             this.isListening = false;
             
-            // 如果有未完成的轉譯，保存它
-            if (this.currentTranscript) {
-                this.saveTranscription(this.currentTranscript);
-                this.currentTranscript = '';
+            // 合併本次會話的所有內容為一個完整項目
+            if (this.currentTranscript && this.currentTranscript.trim() !== '') {
+                let audioUrl = null;
+                if (this.currentAudioBuffer && this.currentAudioBuffer.length > 0) {
+                    audioUrl = this.createWavBlobUrl(this.currentAudioBuffer);
+                }
+                
+                // 觸發完整結果回調
+                if (this.transcriptionCallback) {
+                    this.transcriptionCallback({
+                        finalizeSession: true,
+                        sessionId: this.sessionId,
+                        fullText: this.currentTranscript,
+                        audioUrl: audioUrl,
+                        timestamp: new Date()
+                    });
+                }
             }
+            
+            // 清除臨時顯示
+            if (this.transcriptionCallback) {
+                this.transcriptionCallback({
+                    clearInterim: true
+                });
+            }
+            
+            // 重置狀態
+            this.currentTranscript = '';
+            this.sessionId = null;
         };
         
         // 錯誤事件
@@ -106,9 +133,13 @@ class SpeechTranscriber {
                 this.transcriptionCallback({
                     interim: interimTranscript,
                     final: this.currentTranscript,
-                    timestamp: new Date()
+                    timestamp: new Date(),
+                    isStreaming: true
                 });
             }
+            
+            // 不再在串流時顯示每個片段
+            // 只更新臨時顯示區域
         };
     }
     
@@ -142,12 +173,7 @@ class SpeechTranscriber {
     // 暫停但不結束（用於 FSM 狀態切換）
     pause() {
         if (this.recognition && this.isListening) {
-            // 保存當前轉譯
-            if (this.currentTranscript) {
-                this.saveTranscription(this.currentTranscript);
-                this.currentTranscript = '';
-            }
-            
+            // 不需要在暫停時保存，讓 onend 事件處理
             this.recognition.stop();
         }
     }
@@ -197,8 +223,10 @@ class SpeechTranscriber {
         }
     }
     
-    // 保存轉譯結果
-    saveTranscription(text) {
+    // 移除不再需要的方法
+    
+    // 保存轉譯結果（最終結果含音訊）
+    saveTranscription(text, isStreaming = false) {
         if (!text || text.trim() === '') return;
         
         // 建立音訊 URL
@@ -214,7 +242,7 @@ class SpeechTranscriber {
             audioUrl: audioUrl
         };
         
-        // 儲存到歷史記錄
+        // 加入歷史記錄
         this.addToHistory(transcription);
         
         // 觸發完成回調
@@ -223,7 +251,8 @@ class SpeechTranscriber {
                 final: text,
                 timestamp: transcription.timestamp,
                 completed: true,
-                audioUrl: audioUrl
+                audioUrl: audioUrl,
+                isStreaming: false
             });
         }
     }

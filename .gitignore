@@ -55,3 +55,10 @@ build/
 
 # Exclude specific model file
 models/hi_kmu_0721.onnx
+models/whisper/
+
+# Jupyter notebooks
+reference/Open Wake Model.ipynb
+
+# Cloned repositories
+whisper-web/
