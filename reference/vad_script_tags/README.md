@@ -1,1 +1,0 @@
-[examples/script-tags/index.html](https://github.com/ricky0123/vad/blob/master/examples/script-tags/index.html)

@@ -61,4 +61,7 @@ models/whisper/
 reference/Open Wake Model.ipynb
 
 # Cloned repositories
-whisper-web/
+reference/whisper-web/
+reference/open_wake_word_web/
+reference/vad_script_tags/
+reference/web_speech_api/
