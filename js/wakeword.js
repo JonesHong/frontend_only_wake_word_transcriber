@@ -1,20 +1,16 @@
 // 喚醒詞偵測模組
 class WakeWordDetector {
     constructor() {
-        // 預設使用範例中的喚醒詞模型
-        this.modelPath = 'models/hey_jarvis_v0.1.onnx';
+        // 初始化時不設定模型路徑，等待 Config 載入
+        this.modelPath = null;
         this.session = null;
         this.isRunning = false;
         this.detectionCallback = null;
         this.scoreCallback = null;
         
-        // 多模型管理
-        this.availableModels = {
-            'hey_jarvis': 'models/hey_jarvis_v0.1.onnx',
-            'alexa': 'models/alexa_v0.1.onnx',
-            'hey_mycroft': 'models/hey_mycroft_v0.1.onnx'
-        };
-        this.currentModelKey = 'hey_jarvis';
+        // 可用模型列表將在初始化時從 Config 載入
+        this.availableModels = {};
+        this.currentModelKey = 'hey-jarvis'; // 注意：使用連字號而非底線
         this.loadedModels = {}; // 快取已載入的模型
         
         // ONNX Runtime 設定
@@ -40,14 +36,47 @@ class WakeWordDetector {
         this.embeddingBufferSize = 16; // 預設值，會自動檢測
         this.embeddingDimension = 96; // 預設值
         
-        // 分數歷史記錄
-        this.scoreHistory = new Array(50).fill(0);
-        this.detectionThreshold = 0.5;
+        // 從 Config 獲取設定
+        this.scoreHistory = new Array(Config.wakeword.historySize || 50).fill(0);
+        this.detectionThreshold = Config.wakeword.threshold;
     }
     
     async initialize() {
         try {
             console.log('初始化喚醒詞偵測器...');
+            
+            // 從 Config 獲取模型設定
+            console.log('Config.models.wakeword:', window.Config?.models?.wakeword);
+            
+            if (window.Config && window.Config.models.wakeword.available) {
+                this.availableModels = {};
+                for (const [key, modelInfo] of Object.entries(Config.models.wakeword.available)) {
+                    this.availableModels[key] = modelInfo.path;
+                    console.log(`載入模型設定: ${key} -> ${modelInfo.path}`);
+                }
+                
+                // 設定預設模型路徑
+                if (this.availableModels[this.currentModelKey]) {
+                    this.modelPath = this.availableModels[this.currentModelKey];
+                    console.log(`使用預設模型: ${this.currentModelKey} -> ${this.modelPath}`);
+                } else {
+                    // 如果預設模型不存在，使用第一個可用的模型
+                    const firstKey = Object.keys(this.availableModels)[0];
+                    if (firstKey) {
+                        this.currentModelKey = firstKey;
+                        this.modelPath = this.availableModels[firstKey];
+                        console.log(`使用第一個可用模型: ${firstKey} -> ${this.modelPath}`);
+                    }
+                }
+            } else {
+                console.warn('Config.models.wakeword.available 不存在');
+            }
+            
+            if (!this.modelPath) {
+                console.error('所有可用模型:', this.availableModels);
+                console.error('當前模型鍵:', this.currentModelKey);
+                throw new Error('無法從 Config 取得模型路徑');
+            }
             
             // 載入輔助模型
             await this.loadAuxiliaryModels();
@@ -65,8 +94,8 @@ class WakeWordDetector {
     
     async loadAuxiliaryModels() {
         try {
-            // 載入 melspectrogram 模型（直接從已複製的模型資料夾載入）
-            const melspecPath = 'models/melspectrogram.onnx';
+            // 從 Config 載入 melspectrogram 模型
+            const melspecPath = Config.getModelPath('melspectrogram');
             const melspecResponse = await fetch(melspecPath);
             if (melspecResponse.ok) {
                 const modelData = await melspecResponse.arrayBuffer();
@@ -75,8 +104,8 @@ class WakeWordDetector {
                 throw new Error('找不到 melspectrogram 模型');
             }
             
-            // 載入 embedding 模型
-            const embeddingPath = 'models/embedding_model.onnx';
+            // 從 Config 載入 embedding 模型
+            const embeddingPath = Config.getModelPath('embedding');
             const embeddingResponse = await fetch(embeddingPath);
             if (embeddingResponse.ok) {
                 const modelData = await embeddingResponse.arrayBuffer();
@@ -331,6 +360,10 @@ class WakeWordDetector {
     
     setThreshold(threshold) {
         this.detectionThreshold = threshold;
+        // 同步更新 Config
+        if (window.Config) {
+            Config.set('wakeword.threshold', threshold);
+        }
     }
     
     getScoreHistory() {
@@ -410,15 +443,10 @@ window.wakewordDetector = new WakeWordDetector();
 if (window.settingsManager) {
     window.settingsManager.onSettingChange((key, value) => {
         if (key === 'wakewordModel') {
-            // 對應設定中的模型值到實際的模型鍵
-            const modelMap = {
-                'hey_jarvis': 'hey_jarvis',
-                'hey_mycroft': 'hey_mycroft',
-                'alexa': 'alexa'
-            };
-            
-            const modelKey = modelMap[value] || 'hey_jarvis';
-            window.wakewordDetector.switchModel(modelKey);
+            // 使用 Config 中定義的模型
+            if (Config.models.wakeword.available[value]) {
+                window.wakewordDetector.switchModel(value);
+            }
         }
     });
 }

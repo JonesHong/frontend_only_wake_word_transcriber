@@ -67,6 +67,22 @@ class VoiceAssistantApp {
                 throw new Error('視覺化元件初始化失敗');
             }
             
+            // 確保 Config 已經初始化完成（載入 registry）
+            loadingText.textContent = '正在載入模型註冊表...';
+            progressBar.style.width = '30%';
+            
+            if (window.Config) {
+                // 總是重新初始化以確保載入完成
+                console.log('初始化 Config...');
+                await window.Config.init();
+                
+                // 驗證載入成功
+                console.log('Config 載入完成，可用的喚醒詞模型:', Object.keys(window.Config.models.wakeword.available));
+                console.log('VAD 模型路徑:', window.Config.models.vad.model);
+            } else {
+                throw new Error('Config 物件不存在');
+            }
+            
             // 更新載入進度
             loadingText.textContent = '正在載入喚醒詞模型...';
             progressBar.style.width = '40%';
@@ -110,8 +126,14 @@ class VoiceAssistantApp {
             window.voiceActivityDetector.setCallback((vadDetected, vadScore, isSpeechActive) => {
                 window.visualizer.updateVADStatus(vadDetected);
                 
-                if (vadDetected) {
+                // 處理語音活動狀態變化
+                if (isSpeechActive) {
+                    // 語音活動中，重置計時器
                     window.voiceAssistantFSM.onVoiceActivityDetected();
+                } else if (window.voiceAssistantFSM.getCurrentState() === 'Listening' && 
+                          window.voiceActivityDetector.hasDetectedSpeech) {
+                    // 只有在曾經偵測到語音後，語音活動結束才觸發靜音偵測
+                    window.voiceAssistantFSM.onSilenceDetected();
                 }
             });
             

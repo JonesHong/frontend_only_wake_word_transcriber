@@ -1,0 +1,583 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>模型註冊管理系統 v2</title>
+    
+    <link rel="icon" href="favicon.ico" type="image/x-icon">
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Tailwind CSS 配置 -->
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    animation: {
+                        'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                        'fade-in': 'fadeIn 0.3s ease-in-out',
+                        'slide-in': 'slideIn 0.3s ease-out',
+                        'spin-slow': 'spin 3s linear infinite'
+                    },
+                    keyframes: {
+                        fadeIn: {
+                            '0%': { opacity: '0' },
+                            '100%': { opacity: '1' }
+                        },
+                        slideIn: {
+                            '0%': { transform: 'translateY(-10px)', opacity: '0' },
+                            '100%': { transform: 'translateY(0)', opacity: '1' }
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <!-- 自定義樣式 -->
+    <link rel="stylesheet" href="style.css">
+    
+</head>
+<body class="bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 min-h-screen overflow-hidden">
+    <div class="container mx-auto px-2 py-2 max-w-7xl h-screen flex flex-col">
+        <!-- Header -->
+        <header class="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-4 mb-2 animate-fade-in flex-shrink-0">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center gap-4">
+                    <i class="fas fa-robot text-3xl text-purple-600 dark:text-purple-400"></i>
+                    <div>
+                        <h1 class="text-2xl font-bold text-gray-800 dark:text-white flex items-center gap-3">
+                            模型註冊管理系統
+                            <span class="px-3 py-1 bg-gradient-to-r from-purple-600 to-pink-600 text-white text-sm rounded-full">
+                                v2.0
+                            </span>
+                        </h1>
+                        <p class="text-gray-600 dark:text-gray-400 text-sm mt-1">統一管理來自不同平台的 AI 模型</p>
+                    </div>
+                </div>
+                <!-- Dark Mode Toggle -->
+                <button onclick="toggleDarkMode()" class="p-3 rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors">
+                    <i class="fas fa-moon dark:hidden text-gray-700"></i>
+                    <i class="fas fa-sun hidden dark:block text-yellow-400"></i>
+                </button>
+            </div>
+        </header>
+
+        <!-- Statistics Cards moved to floating window -->
+
+        <!-- Main Layout -->
+        <div class="grid grid-cols-1 lg:grid-cols-4 gap-3 flex-grow overflow-hidden" style="height: calc(100vh - 120px);">
+            <!-- Sidebar -->
+            <aside class="lg:col-span-1">
+                <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 h-full overflow-y-auto">
+                    <h2 class="text-lg font-semibold text-gray-800 dark:text-white mb-4 flex items-center gap-2">
+                        <i class="fas fa-sliders-h text-purple-500"></i>
+                        控制面板
+                    </h2>
+                    
+                    <!-- Action Buttons -->
+                    <div class="space-y-2 mb-4">
+                        <button onclick="showAddModal()" class="w-full px-4 py-2 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg hover:from-purple-700 hover:to-pink-700 transition-all transform hover:scale-105 flex items-center justify-center gap-2">
+                            <i class="fas fa-plus"></i>
+                            新增模型
+                        </button>
+                        <button onclick="loadRegistry()" class="w-full px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors flex items-center justify-center gap-2">
+                            <i class="fas fa-sync-alt"></i>
+                            重新載入
+                        </button>
+                        <button onclick="exportRegistry()" class="w-full px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors flex items-center justify-center gap-2">
+                            <i class="fas fa-download"></i>
+                            匯出註冊表
+                        </button>
+                        <button onclick="showImportModal()" class="w-full px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors flex items-center justify-center gap-2">
+                            <i class="fas fa-upload"></i>
+                            匯入註冊表
+                        </button>
+                    </div>
+                    
+                    <!-- Filters -->
+                    <div class="space-y-3">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">模型類型</label>
+                            <select id="typeFilter" onchange="applyFilters()" class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-gray-100 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent">
+                                <option value="">全部類型</option>
+                                <option value="asr">語音識別 (ASR)</option>
+                                <option value="wakeword">喚醒詞</option>
+                                <option value="vad">語音活動檢測</option>
+                                <option value="tts">語音合成</option>
+                                <option value="nlp">自然語言處理</option>
+                            </select>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">來源平台</label>
+                            <select id="sourceFilter" onchange="applyFilters()" class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-gray-100 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent">
+                                <option value="">全部平台</option>
+                                <option value="huggingface">Hugging Face</option>
+                                <option value="github">GitHub</option>
+                                <option value="local">本地</option>
+                            </select>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">下載狀態</label>
+                            <select id="statusFilter" onchange="applyFilters()" class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-gray-100 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent">
+                                <option value="">全部狀態</option>
+                                <option value="downloaded">已下載</option>
+                                <option value="pending">待下載</option>
+                            </select>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">搜尋模型</label>
+                            <div class="relative">
+                                <input type="text" id="searchInput" placeholder="輸入關鍵字..." oninput="applyFilters()" class="w-full px-3 py-2 pl-9 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-gray-100 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent">
+                                <i class="fas fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </aside>
+
+            <!-- Content Area -->
+            <main class="lg:col-span-3">
+                <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 h-full flex flex-col overflow-hidden">
+                    <div class="flex items-center justify-between mb-3 pb-3 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
+                        <h2 class="text-xl font-semibold text-gray-800 dark:text-white flex items-center gap-2">
+                            <i class="fas fa-th-large text-purple-500"></i>
+                            模型列表
+                        </h2>
+                        <div class="flex gap-2">
+                            <button onclick="setView('grid')" class="view-btn px-3 py-1 rounded-lg bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300">
+                                <i class="fas fa-th"></i>
+                            </button>
+                            <button onclick="setView('list')" class="view-btn px-3 py-1 rounded-lg bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300">
+                                <i class="fas fa-list"></i>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div id="modelsContainer" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 overflow-y-auto scrollbar-custom pr-2 flex-grow" style="max-height: calc(100vh - 200px);">
+                        <!-- Models will be rendered here -->
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <!-- Add/Edit Model Modal -->
+    <div id="modelModal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center z-50 p-4">
+        <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto scrollbar-custom animate-slide-in">
+            <div class="sticky top-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 p-6 z-10">
+                <div class="flex items-center justify-between">
+                    <h2 id="modalTitle" class="text-xl font-semibold text-gray-800 dark:text-white">新增模型</h2>
+                    <button onclick="closeModal('modelModal')" class="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors">
+                        <i class="fas fa-times text-gray-500 dark:text-gray-400"></i>
+                    </button>
+                </div>
+            </div>
+            
+            <form id="modelForm" onsubmit="saveModel(event)" class="p-6">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">模型 ID *</label>
+                        <input type="text" id="modelId" required placeholder="unique-model-id" class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-gray-100 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent">
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">模型名稱 *</label>
+                        <input type="text" id="modelName" required placeholder="模型顯示名稱" class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-gray-100 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent">
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">模型類型 *</label>
+                        <select id="modelType" required class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-gray-100 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent">
+                            <option value="">選擇類型</option>
+                            <option value="asr">語音識別 (ASR)</option>
+                            <option value="wakeword">喚醒詞檢測</option>
+                            <option value="vad">語音活動檢測</option>
+                            <option value="tts">語音合成</option>
+                            <option value="nlp">自然語言處理</option>
+                        </select>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">來源平台 *</label>
+                        <select id="sourcePlatform" required class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-gray-100 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent">
+                            <option value="">選擇平台</option>
+                            <option value="huggingface">Hugging Face</option>
+                            <option value="github">GitHub</option>
+                            <option value="local">本地</option>
+                        </select>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">作者/組織</label>
+                        <input type="text" id="sourceAuthor" placeholder="例如: Xenova, dscripka" class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-gray-100 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent">
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">倉庫名稱</label>
+                        <input type="text" id="sourceRepo" placeholder="例如: whisper-tiny" class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-gray-100 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent">
+                    </div>
+                    
+                    <div class="md:col-span-2">
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">來源 URL</label>
+                        <input type="url" id="sourceUrl" placeholder="https://..." class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-gray-100 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent">
+                    </div>
+                    
+                    <div class="md:col-span-2">
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">本地路徑</label>
+                        <input type="text" id="localPath" placeholder="相對於 models/ 的路徑" class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-gray-100 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent">
+                    </div>
+                    
+                    <div class="md:col-span-2">
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">描述</label>
+                        <textarea id="modelDescription" rows="3" placeholder="模型功能描述..." class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-gray-100 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"></textarea>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">檔案大小 (MB)</label>
+                        <input type="number" id="modelSize" placeholder="0" class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-gray-100 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent">
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">格式</label>
+                        <select id="modelFormat" class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-gray-100 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent">
+                            <option value="onnx">ONNX</option>
+                            <option value="pytorch">PyTorch</option>
+                            <option value="tensorflow">TensorFlow</option>
+                            <option value="other">其他</option>
+                        </select>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">下載狀態</label>
+                        <select id="downloadStatus" class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-gray-100 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent">
+                            <option value="false">未下載</option>
+                            <option value="true">已下載</option>
+                        </select>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">標籤 (逗號分隔)</label>
+                        <input type="text" id="modelTags" placeholder="whisper, fast, lightweight" class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-gray-100 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent">
+                    </div>
+                </div>
+                
+                <div class="flex justify-end gap-3 mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
+                    <button type="button" onclick="closeModal('modelModal')" class="px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors">
+                        取消
+                    </button>
+                    <button type="submit" class="px-4 py-2 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg hover:from-purple-700 hover:to-pink-700 transition-all">
+                        儲存
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Import Modal -->
+    <div id="importModal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center z-50 p-4">
+        <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-2xl w-full animate-slide-in">
+            <div class="border-b border-gray-200 dark:border-gray-700 p-6">
+                <div class="flex items-center justify-between">
+                    <h2 class="text-xl font-semibold text-gray-800 dark:text-white">匯入註冊表</h2>
+                    <button onclick="closeModal('importModal')" class="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors">
+                        <i class="fas fa-times text-gray-500 dark:text-gray-400"></i>
+                    </button>
+                </div>
+            </div>
+            
+            <div class="p-6">
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">貼上 JSON 內容</label>
+                <textarea id="importJson" rows="15" placeholder="貼上 global_registry.json 內容..." class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-gray-100 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent font-mono text-sm"></textarea>
+                
+                <div class="flex justify-end gap-3 mt-6">
+                    <button onclick="closeModal('importModal')" class="px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors">
+                        取消
+                    </button>
+                    <button onclick="importRegistry()" class="px-4 py-2 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg hover:from-purple-700 hover:to-pink-700 transition-all">
+                        匯入
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Floating Statistics Button -->
+    <button id="statsButton" onclick="toggleStatsWindow()" class="fixed bottom-6 right-6 w-14 h-14 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-full shadow-lg hover:shadow-xl transition-all transform hover:scale-110 z-40 flex items-center justify-center">
+        <i class="fas fa-chart-pie text-xl"></i>
+    </button>
+
+    <!-- Floating Statistics Window -->
+    <div id="statsWindow" class="fixed hidden bg-white dark:bg-gray-800 rounded-xl shadow-2xl z-50 animate-fade-in" style="width: 400px; min-height: 300px; top: 100px; left: calc(50% - 200px);">
+        <!-- Window Header -->
+        <div class="bg-gradient-to-r from-purple-600 to-pink-600 text-white p-3 rounded-t-xl cursor-move flex items-center justify-between" id="statsWindowHeader">
+            <div class="flex items-center gap-2">
+                <i class="fas fa-chart-bar"></i>
+                <span class="font-semibold">統計資訊</span>
+            </div>
+            <div class="flex items-center gap-2">
+                <button onclick="minimizeStatsWindow()" class="hover:bg-white/20 p-1 rounded transition-colors">
+                    <i class="fas fa-minus text-sm"></i>
+                </button>
+                <button onclick="maximizeStatsWindow()" class="hover:bg-white/20 p-1 rounded transition-colors">
+                    <i class="fas fa-expand text-sm"></i>
+                </button>
+                <button onclick="closeStatsWindow()" class="hover:bg-white/20 p-1 rounded transition-colors">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+        </div>
+        
+        <!-- Window Content -->
+        <div id="statsWindowContent" class="p-4 space-y-4">
+            <!-- Statistics Cards -->
+            <div class="grid grid-cols-2 gap-3">
+                <div class="bg-gray-50 dark:bg-gray-700 rounded-lg p-3">
+                    <div class="flex items-center justify-between mb-1">
+                        <h3 class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">總模型數</h3>
+                        <i class="fas fa-cubes text-purple-500 text-sm"></i>
+                    </div>
+                    <div class="text-2xl font-bold text-gray-800 dark:text-white" id="floatTotalModels">0</div>
+                </div>
+                
+                <div class="bg-gray-50 dark:bg-gray-700 rounded-lg p-3">
+                    <div class="flex items-center justify-between mb-1">
+                        <h3 class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">模型類型</h3>
+                        <i class="fas fa-layer-group text-blue-500 text-sm"></i>
+                    </div>
+                    <div class="text-2xl font-bold text-gray-800 dark:text-white" id="floatModelTypes">0</div>
+                </div>
+                
+                <div class="bg-gray-50 dark:bg-gray-700 rounded-lg p-3">
+                    <div class="flex items-center justify-between mb-1">
+                        <h3 class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">來源平台</h3>
+                        <i class="fas fa-globe text-green-500 text-sm"></i>
+                    </div>
+                    <div class="text-2xl font-bold text-gray-800 dark:text-white" id="floatSourcePlatforms">0</div>
+                </div>
+                
+                <div class="bg-gray-50 dark:bg-gray-700 rounded-lg p-3">
+                    <div class="flex items-center justify-between mb-1">
+                        <h3 class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">總大小</h3>
+                        <i class="fas fa-database text-orange-500 text-sm"></i>
+                    </div>
+                    <div class="text-2xl font-bold text-gray-800 dark:text-white" id="floatTotalSize">0 MB</div>
+                </div>
+            </div>
+            
+            <!-- Breakdown Details -->
+            <div class="space-y-3">
+                <div class="bg-gray-50 dark:bg-gray-700 rounded-lg p-3">
+                    <h4 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">類型分佈</h4>
+                    <div class="space-y-1 text-xs" id="floatTypeBreakdown"></div>
+                </div>
+                
+                <div class="bg-gray-50 dark:bg-gray-700 rounded-lg p-3">
+                    <h4 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">平台分佈</h4>
+                    <div class="space-y-1 text-xs" id="floatSourceBreakdown"></div>
+                </div>
+                
+                <div class="bg-gray-50 dark:bg-gray-700 rounded-lg p-3">
+                    <h4 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">下載狀態</h4>
+                    <div class="flex justify-between text-sm">
+                        <span class="text-gray-600 dark:text-gray-400">已下載: <span id="floatDownloadedCount" class="font-semibold text-green-600 dark:text-green-400">0</span></span>
+                        <span class="text-gray-600 dark:text-gray-400">待下載: <span id="floatPendingCount" class="font-semibold text-yellow-600 dark:text-yellow-400">0</span></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Resize Handle -->
+        <div class="absolute bottom-0 right-0 w-4 h-4 cursor-se-resize" id="resizeHandle">
+            <svg class="w-full h-full text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+                <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z"/>
+            </svg>
+        </div>
+    </div>
+
+    <!-- Details Modal -->
+    <div id="detailsModal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center z-50 p-4">
+        <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto scrollbar-custom animate-slide-in">
+            <div class="sticky top-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 p-6 z-10">
+                <div class="flex items-center justify-between">
+                    <h2 id="detailsTitle" class="text-xl font-semibold text-gray-800 dark:text-white">模型詳情</h2>
+                    <button onclick="closeModal('detailsModal')" class="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors">
+                        <i class="fas fa-times text-gray-500 dark:text-gray-400"></i>
+                    </button>
+                </div>
+            </div>
+            
+            <div class="p-6">
+                <div id="detailsContent" class="bg-gray-50 dark:bg-gray-900 rounded-lg p-4 font-mono text-sm text-gray-700 dark:text-gray-300 max-h-96 overflow-y-auto scrollbar-custom"></div>
+                
+                <div class="flex justify-end gap-3 mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
+                    <button onclick="editModel()" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2">
+                        <i class="fas fa-edit"></i>
+                        編輯
+                    </button>
+                    <button onclick="deleteModel()" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors flex items-center gap-2">
+                        <i class="fas fa-trash"></i>
+                        刪除
+                    </button>
+                    <button onclick="closeModal('detailsModal')" class="px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors">
+                        關閉
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+    <script>
+        // Dark mode toggle
+        function toggleDarkMode() {
+            document.documentElement.classList.toggle('dark');
+            localStorage.setItem('darkMode', document.documentElement.classList.contains('dark'));
+        }
+
+        // Initialize dark mode
+        if (localStorage.getItem('darkMode') === 'true' || 
+            (!localStorage.getItem('darkMode') && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+            document.documentElement.classList.add('dark');
+        }
+        
+        // Statistics Window Functions
+        let statsWindowOpen = false;
+        let isDragging = false;
+        let isResizing = false;
+        let dragOffset = { x: 0, y: 0 };
+        let originalSize = { width: 400, height: 300 };
+        let isMaximized = false;
+        let previousPosition = { top: 100, left: 'calc(50% - 200px)' };
+        
+        function toggleStatsWindow() {
+            const window = document.getElementById('statsWindow');
+            statsWindowOpen = !statsWindowOpen;
+            
+            if (statsWindowOpen) {
+                window.classList.remove('hidden');
+                updateFloatingStats();
+            } else {
+                window.classList.add('hidden');
+            }
+        }
+        
+        function closeStatsWindow() {
+            const window = document.getElementById('statsWindow');
+            window.classList.add('hidden');
+            statsWindowOpen = false;
+        }
+        
+        function minimizeStatsWindow() {
+            const window = document.getElementById('statsWindow');
+            const content = document.getElementById('statsWindowContent');
+            const resizeHandle = document.getElementById('resizeHandle');
+            
+            content.classList.toggle('hidden');
+            resizeHandle.classList.toggle('hidden');
+            
+            if (content.classList.contains('hidden')) {
+                window.style.minHeight = '40px';
+                window.style.height = 'auto';
+            } else {
+                window.style.minHeight = '300px';
+                window.style.height = '';
+            }
+        }
+        
+        function maximizeStatsWindow() {
+            const window = document.getElementById('statsWindow');
+            
+            if (!isMaximized) {
+                previousPosition = {
+                    top: window.style.top,
+                    left: window.style.left,
+                    width: window.style.width,
+                    height: window.style.height
+                };
+                
+                window.style.top = '10px';
+                window.style.left = '10px';
+                window.style.width = 'calc(100% - 20px)';
+                window.style.height = 'calc(100% - 20px)';
+                isMaximized = true;
+            } else {
+                window.style.top = previousPosition.top || '100px';
+                window.style.left = previousPosition.left || 'calc(50% - 200px)';
+                window.style.width = previousPosition.width || '400px';
+                window.style.height = previousPosition.height || '';
+                isMaximized = false;
+            }
+        }
+        
+        function updateFloatingStats() {
+            // Copy stats from main stats to floating window
+            const totalModels = document.getElementById('totalModels');
+            const modelTypes = document.getElementById('modelTypes');
+            const sourcePlatforms = document.getElementById('sourcePlatforms');
+            const totalSize = document.getElementById('totalSize');
+            const typeBreakdown = document.getElementById('typeBreakdown');
+            const sourceBreakdown = document.getElementById('sourceBreakdown');
+            const downloadedCount = document.getElementById('downloadedCount');
+            const pendingCount = document.getElementById('pendingCount');
+            
+            if (totalModels) document.getElementById('floatTotalModels').textContent = totalModels.textContent;
+            if (modelTypes) document.getElementById('floatModelTypes').textContent = modelTypes.textContent;
+            if (sourcePlatforms) document.getElementById('floatSourcePlatforms').textContent = sourcePlatforms.textContent;
+            if (totalSize) document.getElementById('floatTotalSize').textContent = totalSize.textContent;
+            if (typeBreakdown) document.getElementById('floatTypeBreakdown').innerHTML = typeBreakdown.innerHTML;
+            if (sourceBreakdown) document.getElementById('floatSourceBreakdown').innerHTML = sourceBreakdown.innerHTML;
+            if (downloadedCount) document.getElementById('floatDownloadedCount').textContent = downloadedCount.textContent;
+            if (pendingCount) document.getElementById('floatPendingCount').textContent = pendingCount.textContent;
+        }
+        
+        // Dragging functionality
+        document.addEventListener('DOMContentLoaded', function() {
+            const statsWindow = document.getElementById('statsWindow');
+            const header = document.getElementById('statsWindowHeader');
+            const resizeHandle = document.getElementById('resizeHandle');
+            
+            // Dragging
+            header.addEventListener('mousedown', function(e) {
+                if (isMaximized) return;
+                isDragging = true;
+                dragOffset.x = e.clientX - statsWindow.offsetLeft;
+                dragOffset.y = e.clientY - statsWindow.offsetTop;
+                e.preventDefault();
+            });
+            
+            // Resizing
+            resizeHandle.addEventListener('mousedown', function(e) {
+                if (isMaximized) return;
+                isResizing = true;
+                e.preventDefault();
+            });
+            
+            document.addEventListener('mousemove', function(e) {
+                if (isDragging) {
+                    statsWindow.style.left = (e.clientX - dragOffset.x) + 'px';
+                    statsWindow.style.top = (e.clientY - dragOffset.y) + 'px';
+                }
+                
+                if (isResizing) {
+                    const newWidth = e.clientX - statsWindow.offsetLeft;
+                    const newHeight = e.clientY - statsWindow.offsetTop;
+                    
+                    if (newWidth > 300) statsWindow.style.width = newWidth + 'px';
+                    if (newHeight > 200) statsWindow.style.height = newHeight + 'px';
+                }
+            });
+            
+            document.addEventListener('mouseup', function() {
+                isDragging = false;
+                isResizing = false;
+            });
+        });
+    </script>
+</body>
+</html>

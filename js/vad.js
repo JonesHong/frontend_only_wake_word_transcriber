@@ -3,14 +3,17 @@ class VoiceActivityDetector {
     constructor() {
         this.vadModel = null;
         this.vadState = { h: null, c: null };
-        this.vadThreshold = 0.5;
+        this.vadThreshold = Config.vad.speechThreshold || 0.5;
         this.isInitialized = false;
         this.vadCallback = null;
         
-        // VAD 參數
-        this.vadHangoverFrames = 12; // 延遲幀數，避免過早切斷
+        // 從 Config 獲取 VAD 參數
+        this.vadHangoverFrames = Config.models.vad.hangoverFrames || 12;
         this.vadHangoverCounter = 0;
         this.isSpeechActive = false;
+        this.hasDetectedSpeech = false; // 追蹤是否曾偵測到語音
+        this.sampleRate = Config.models.vad.sampleRate || 16000;
+        this.chunkSize = Config.models.vad.chunkSize || 512;
         
         // ONNX Runtime 設定
         this.ortConfig = {
@@ -23,8 +26,9 @@ class VoiceActivityDetector {
         try {
             console.log('初始化 VAD...');
             
-            // 載入 Silero VAD 模型（已複製到 models 資料夾）
-            const modelPath = 'models/silero_vad.onnx';
+            // 從 Config 載入 Silero VAD 模型
+            const modelPath = Config.getModelPath('vad');
+            console.log('VAD 模型路徑:', modelPath);
             const response = await fetch(modelPath);
             
             if (!response.ok) {
@@ -55,17 +59,19 @@ class VoiceActivityDetector {
         };
         this.vadHangoverCounter = 0;
         this.isSpeechActive = false;
+        this.hasDetectedSpeech = false; // 重置語音偵測標記
     }
     
     async processAudioChunk(audioData) {
         if (!this.isInitialized || !this.vadModel) {
+            console.warn('VAD: 未初始化或模型未載入');
             return false;
         }
         
         try {
             // 準備輸入張量
             const inputTensor = new ort.Tensor('float32', audioData, [1, audioData.length]);
-            const srTensor = new ort.Tensor('int64', [BigInt(16000)], []); // 採樣率 16kHz
+            const srTensor = new ort.Tensor('int64', [BigInt(this.sampleRate)], []); // 從 Config 取得採樣率
             
             // 執行 VAD 推論
             const results = await this.vadModel.run({
@@ -86,14 +92,15 @@ class VoiceActivityDetector {
             // 處理語音活動狀態
             if (vadDetected) {
                 if (!this.isSpeechActive) {
-                    console.log('偵測到語音活動開始');
+                    console.log('VAD: 偵測到語音活動開始');
+                    this.hasDetectedSpeech = true; // 標記已偵測到語音
                 }
                 this.isSpeechActive = true;
                 this.vadHangoverCounter = this.vadHangoverFrames;
             } else if (this.isSpeechActive) {
                 this.vadHangoverCounter--;
                 if (this.vadHangoverCounter <= 0) {
-                    console.log('語音活動結束');
+                    console.log('VAD: 語音活動結束（經過 hangover frames）');
                     this.isSpeechActive = false;
                 }
             }
@@ -117,6 +124,10 @@ class VoiceActivityDetector {
     
     setThreshold(threshold) {
         this.vadThreshold = threshold;
+        // 同步更新 Config
+        if (window.Config) {
+            Config.set('vad.speechThreshold', threshold);
+        }
     }
     
     getState() {

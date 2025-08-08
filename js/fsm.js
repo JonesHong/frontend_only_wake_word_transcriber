@@ -16,12 +16,12 @@ class VoiceAssistantFSM {
         
         // 計時器
         this.silenceTimer = null;
-        this.silenceTimeout = 1800; // 1.8秒靜音計時（可動態調整）
+        this.silenceTimeout = 3000; // 3秒靜音計時（預設值）
         this.wakewordCooldown = false; // 喚醒詞冷卻時間
         
         // VAD 設定
         this.useVAD = true; // 是否使用 VAD 自動結束
-        this.manualMode = false; // 手動結束模式
+        this.isManualMode = false; // 是否為手動結束模式（需要手動按鈕結束）
         
         // 初始化設定
         this.initializeSettings();
@@ -81,8 +81,12 @@ class VoiceAssistantFSM {
                 if (window.wakewordDetector) {
                     window.wakewordDetector.stop();
                 }
-                // 只在 VAD 模式下啟動靜音計時器
-                if (this.useVAD) {
+                // 重置 VAD 狀態，確保從乾淨狀態開始
+                if (window.voiceActivityDetector) {
+                    window.voiceActivityDetector.reset();
+                }
+                // 只要不是手動結束模式，都啟動計時器
+                if (!this.isManualMode) {
                     this.startSilenceTimer();
                 }
                 break;
@@ -91,7 +95,7 @@ class VoiceAssistantFSM {
     
     // 重置靜音計時器
     resetSilenceTimer() {
-        if (this.currentState === this.states.LISTENING && this.useVAD) {
+        if (this.currentState === this.states.LISTENING && !this.isManualMode) {
             this.startSilenceTimer();
         }
     }
@@ -140,12 +144,25 @@ class VoiceAssistantFSM {
         }
     }
     
+    // 偵測到靜音（VAD 偵測到語音結束）
+    onSilenceDetected() {
+        // 只在 VAD 開啟且非手動結束模式時觸發
+        if (this.currentState === this.states.LISTENING && this.useVAD && !this.isManualMode) {
+            console.log('VAD 偵測到語音結束，返回 Idle 狀態');
+            if (window.logger) {
+                window.logger.logEvent('VAD 偵測到靜音', { state: this.currentState });
+            }
+            // 清除計時器避免重複觸發
+            this.clearSilenceTimer();
+            this.transition(this.states.IDLE);
+        }
+    }
+    
     // 初始化設定
     initializeSettings() {
         // 從設定管理器載入設定
         if (window.settingsManager) {
             this.useVAD = window.settingsManager.getSetting('useVAD');
-            this.manualMode = !this.useVAD; // 設定手動模式
             this.silenceTimeout = window.settingsManager.getSetting('silenceTimeout') * 1000; // 轉換為毫秒
             
             // 監聽設定變更
@@ -153,17 +170,16 @@ class VoiceAssistantFSM {
                 switch (key) {
                     case 'useVAD':
                         this.useVAD = value;
-                        this.manualMode = !value; // 反轉邏輯
-                        console.log(`手動結束模式: ${this.manualMode ? '開啟' : '關閉'}`);
+                        this.isManualMode = !value; // 手動結束模式與 VAD 相反
                         console.log(`VAD 自動結束: ${value ? '開啟' : '關閉'}`);
+                        console.log(`手動結束模式: ${this.isManualMode ? '開啟' : '關閉'}`);
                         
                         if (this.currentState === this.states.LISTENING) {
-                            if (this.manualMode) {
-                                console.log('切換到手動模式，停止自動結束計時器');
-                                // 手動模式下清除計時器
+                            if (this.isManualMode) {
+                                console.log('切換到手動結束模式，清除計時器');
                                 this.clearSilenceTimer();
                             } else {
-                                console.log('切換到自動模式，啟動自動結束計時器');
+                                console.log('切換到自動結束模式，啟動計時器');
                                 this.startSilenceTimer();
                             }
                         }
@@ -206,17 +222,17 @@ class VoiceAssistantFSM {
     
     // 修改計時器邏輯
     startSilenceTimer() {
-        // 手動模式下不啟動計時器
-        if (this.manualMode) {
-            console.log('手動模式下不啟動自動結束計時器');
+        // 只在手動結束模式下不啟動計時器
+        if (this.isManualMode) {
+            console.log('手動結束模式，不啟動計時器');
             return;
         }
         
         this.clearSilenceTimer();
-        console.log(`啟動靜音計時器 - 自動模式，超時: ${this.silenceTimeout}ms`);
+        console.log(`啟動靜音計時器，超時: ${this.silenceTimeout}ms`);
         
         this.silenceTimer = setTimeout(() => {
-            // 自動模式：返回 Idle 狀態
+            // 自動結束模式下觸發
             const msg = window.i18n 
                 ? window.i18n.t('log.silenceDetected')
                 : `偵測到 ${(this.silenceTimeout / 1000).toFixed(1)} 秒靜音，返回 Idle 狀態`;

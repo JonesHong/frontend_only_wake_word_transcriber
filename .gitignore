@@ -53,9 +53,27 @@ build/
 *.bak
 *.tmp
 
-# Exclude specific model file
-models/hi_kmu_0721.onnx
-models/whisper/
+# Models folder - ignore all except essential models
+models/
+models/**/*.onnx
+models/**/*.json
+models/**/*.txt
+# Keep essential wake word and VAD models
+!models/
+!models/**/.gitkeep
+!models/README.md
+!models/global_registry.json
+!models/github/
+!models/github/dscripka/
+!models/github/dscripka/openWakeWord/
+!models/github/dscripka/openWakeWord/alexa_v0.1.onnx
+!models/github/dscripka/openWakeWord/embedding_model.onnx
+!models/github/dscripka/openWakeWord/hey_jarvis_v0.1.onnx
+!models/github/dscripka/openWakeWord/hey_mycroft_v0.1.onnx
+!models/github/dscripka/openWakeWord/melspectrogram.onnx
+!models/github/snakers4/
+!models/github/snakers4/silero-vad/
+!models/github/snakers4/silero-vad/silero_vad.onnx
 
 # Jupyter notebooks
 reference/Open Wake Model.ipynb
