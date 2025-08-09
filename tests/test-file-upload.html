@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>檔案上傳轉譯測試</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-900 text-white p-8">
+    <div class="max-w-4xl mx-auto">
+        <h1 class="text-3xl font-bold mb-8">檔案上傳轉譯測試</h1>
+        
+        <!-- 檔案上傳區域 -->
+        <div class="mb-8">
+            <div id="dropZone" class="border-2 border-dashed border-gray-600 rounded-lg p-12 text-center hover:border-blue-500 transition-colors">
+                <svg class="mx-auto h-12 w-12 text-gray-400 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                </svg>
+                <p class="mb-2 text-sm text-gray-400">
+                    <span class="font-semibold">點擊上傳</span> 或拖放檔案到此處
+                </p>
+                <p class="text-xs text-gray-500">支援 MP3, WAV, M4A, WEBM (最大 25MB)</p>
+                <input type="file" id="fileInput" class="hidden" accept="audio/*,.mp3,.wav,.m4a,.webm" multiple>
+            </div>
+        </div>
+
+        <!-- 模式選擇 -->
+        <div class="mb-8">
+            <label class="block text-sm font-medium mb-2">轉譯引擎</label>
+            <select id="engineSelect" class="bg-gray-800 border border-gray-700 rounded px-4 py-2 w-full">
+                <option value="auto">自動選擇</option>
+                <option value="webspeech">Web Speech API (需要網路)</option>
+                <option value="whisper">Whisper (本地處理)</option>
+            </select>
+        </div>
+
+        <!-- 檔案列表 -->
+        <div id="fileList" class="space-y-4 mb-8"></div>
+
+        <!-- 轉譯結果 -->
+        <div id="results" class="space-y-4"></div>
+
+        <!-- 狀態訊息 -->
+        <div id="status" class="mt-4 text-sm text-gray-400"></div>
+    </div>
+
+    <script type="module">
+        import { getSpeechRecognitionManager } from './js/modules/speech-recognition-manager.js';
+        
+        class FileUploadTranscriber {
+            constructor() {
+                this.speechManager = null;
+                this.files = [];
+                this.init();
+            }
+
+            async init() {
+                // 初始化語音識別管理器
+                this.speechManager = getSpeechRecognitionManager({
+                    language: 'zh-TW'
+                });
+                
+                await this.speechManager.initialize();
+                
+                // 更新狀態
+                const status = this.speechManager.getStatus();
+                this.updateStatus(`可用引擎: ${status.availableEngines.join(', ')}`);
+                
+                // 設定事件監聽器
+                this.setupEventListeners();
+            }
+
+            setupEventListeners() {
+                const dropZone = document.getElementById('dropZone');
+                const fileInput = document.getElementById('fileInput');
+                const engineSelect = document.getElementById('engineSelect');
+
+                // 點擊上傳
+                dropZone.addEventListener('click', () => fileInput.click());
+
+                // 檔案選擇
+                fileInput.addEventListener('change', (e) => {
+                    this.handleFiles(e.target.files);
+                });
+
+                // 拖放
+                dropZone.addEventListener('dragover', (e) => {
+                    e.preventDefault();
+                    dropZone.classList.add('border-blue-500');
+                });
+
+                dropZone.addEventListener('dragleave', () => {
+                    dropZone.classList.remove('border-blue-500');
+                });
+
+                dropZone.addEventListener('drop', (e) => {
+                    e.preventDefault();
+                    dropZone.classList.remove('border-blue-500');
+                    this.handleFiles(e.dataTransfer.files);
+                });
+
+                // 引擎選擇
+                engineSelect.addEventListener('change', async (e) => {
+                    const mode = e.target.value;
+                    if (mode !== 'auto') {
+                        try {
+                            await this.speechManager.setMode(mode);
+                            this.updateStatus(`切換到 ${mode} 引擎`);
+                        } catch (error) {
+                            this.updateStatus(`無法切換到 ${mode}: ${error.message}`, 'error');
+                        }
+                    }
+                });
+            }
+
+            handleFiles(fileList) {
+                for (const file of fileList) {
+                    if (this.validateFile(file)) {
+                        this.processFile(file);
+                    }
+                }
+            }
+
+            validateFile(file) {
+                const maxSize = 25 * 1024 * 1024; // 25MB
+                const allowedTypes = ['audio/mpeg', 'audio/wav', 'audio/mp4', 'audio/webm', 'audio/x-m4a'];
+                
+                if (file.size > maxSize) {
+                    this.updateStatus(`檔案 ${file.name} 太大 (最大 25MB)`, 'error');
+                    return false;
+                }
+
+                if (!allowedTypes.includes(file.type) && !file.name.match(/\.(mp3|wav|m4a|webm)$/i)) {
+                    this.updateStatus(`不支援的檔案類型: ${file.name}`, 'error');
+                    return false;
+                }
+
+                return true;
+            }
+
+            async processFile(file) {
+                const fileId = Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+                
+                // 添加到檔案列表
+                this.addFileToList(file, fileId);
+                
+                try {
+                    this.updateFileStatus(fileId, '轉譯中...');
+                    
+                    // 開始計時
+                    const startTime = performance.now();
+                    
+                    // 轉譯檔案
+                    const result = await this.speechManager.transcribeFile(file);
+                    
+                    // 計算耗時
+                    const duration = ((performance.now() - startTime) / 1000).toFixed(2);
+                    
+                    // 顯示結果
+                    this.showResult(file.name, result, duration, fileId);
+                    this.updateFileStatus(fileId, '完成', 'success');
+                    
+                } catch (error) {
+                    console.error('轉譯失敗:', error);
+                    this.updateFileStatus(fileId, `失敗: ${error.message}`, 'error');
+                }
+            }
+
+            addFileToList(file, fileId) {
+                const fileList = document.getElementById('fileList');
+                const fileItem = document.createElement('div');
+                fileItem.id = `file_${fileId}`;
+                fileItem.className = 'bg-gray-800 rounded-lg p-4';
+                fileItem.innerHTML = `
+                    <div class="flex justify-between items-center">
+                        <div>
+                            <p class="font-medium">${file.name}</p>
+                            <p class="text-sm text-gray-400">${(file.size / 1024 / 1024).toFixed(2)} MB</p>
+                        </div>
+                        <div class="text-sm">
+                            <span id="status_${fileId}" class="text-gray-400">等待中...</span>
+                        </div>
+                    </div>
+                    <div id="progress_${fileId}" class="mt-2 hidden">
+                        <div class="bg-gray-700 rounded-full h-2">
+                            <div class="bg-blue-500 h-2 rounded-full transition-all" style="width: 0%"></div>
+                        </div>
+                    </div>
+                `;
+                fileList.appendChild(fileItem);
+            }
+
+            updateFileStatus(fileId, status, type = 'info') {
+                const statusEl = document.getElementById(`status_${fileId}`);
+                if (statusEl) {
+                    statusEl.textContent = status;
+                    statusEl.className = type === 'error' ? 'text-red-400' : 
+                                       type === 'success' ? 'text-green-400' : 
+                                       'text-yellow-400';
+                }
+            }
+
+            showResult(fileName, transcript, duration, fileId) {
+                const results = document.getElementById('results');
+                const resultItem = document.createElement('div');
+                resultItem.className = 'bg-gray-800 rounded-lg p-4';
+                resultItem.innerHTML = `
+                    <div class="mb-2">
+                        <span class="font-medium">${fileName}</span>
+                        <span class="text-sm text-gray-400 ml-2">(${duration}秒)</span>
+                    </div>
+                    <div class="bg-gray-900 rounded p-3">
+                        <p class="whitespace-pre-wrap">${transcript || '(無法識別內容)'}</p>
+                    </div>
+                    <div class="mt-2 flex gap-2">
+                        <button onclick="navigator.clipboard.writeText(\`${transcript.replace(/`/g, '\\`')}\`)" 
+                                class="text-sm bg-blue-600 hover:bg-blue-700 px-3 py-1 rounded">
+                            複製文字
+                        </button>
+                    </div>
+                `;
+                results.insertBefore(resultItem, results.firstChild);
+            }
+
+            updateStatus(message, type = 'info') {
+                const status = document.getElementById('status');
+                status.textContent = message;
+                status.className = `mt-4 text-sm ${
+                    type === 'error' ? 'text-red-400' : 
+                    type === 'success' ? 'text-green-400' : 
+                    'text-gray-400'
+                }`;
+            }
+        }
+
+        // 啟動應用
+        new FileUploadTranscriber();
+    </script>
+</body>
+</html>

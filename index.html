@@ -43,10 +43,22 @@
         <!-- 標題與控制區 -->
         <div class="header-section">
             <div class="flex items-center justify-between mb-4">
-                <div class="flex-1"></div>
+                <!-- 左側：模式切換 -->
+                <div class="flex-1 flex justify-start">
+                    <div class="inline-flex bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-lg shadow-md border border-white/20 dark:border-gray-700/30 p-1">
+                        <button id="streamingModeBtn" class="mode-tab px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 bg-gradient-to-r from-blue-500 to-blue-600 text-white">
+                            <i class="fas fa-stream mr-2"></i><span data-i18n="ui.streamingMode">即時語音</span>
+                        </button>
+                        <button id="batchModeBtn" class="mode-tab px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200">
+                            <i class="fas fa-file-audio mr-2"></i><span data-i18n="ui.batchMode">檔案/錄音</span>
+                        </button>
+                    </div>
+                </div>
+                <!-- 中間：標題 -->
                 <h1 class="text-2xl font-bold text-center bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-400 dark:to-indigo-400 bg-clip-text text-transparent">
                     <i class="fas fa-microphone-alt mr-2"></i><span data-i18n="ui.title">純前端喚醒詞語音轉譯</span>
                 </h1>
+                <!-- 右側：語言和主題 -->
                 <div class="flex-1 flex justify-end gap-2">
                     <select id="languageSelect" class="px-3 py-2 rounded-lg bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors duration-200 text-sm">
                         <option value="zh-TW">繁體中文</option>
@@ -59,7 +71,8 @@
                     </button>
                 </div>
             </div>
-            <div class="control-status-row bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-xl shadow-lg border border-white/20 dark:border-gray-700/30">
+            
+            <div id="controlSection" class="control-status-row bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-xl shadow-lg border border-white/20 dark:border-gray-700/30">
                 <!-- 控制按鈕 -->
                 <div class="control-group">
                     <button id="startBtn" class="btn btn-primary bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white px-4 py-2 rounded-lg shadow-md transition-all duration-200 hover:shadow-lg">
@@ -101,37 +114,186 @@
 
         <!-- 主要內容區 -->
         <div class="main-content">
-            <!-- 左側視覺化 -->
+            <!-- 左側區塊 (可切換) -->
             <div class="visualization-column space-y-3">
-                <div class="chart-container bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-xl shadow-lg border border-white/20 dark:border-gray-700/30 p-4">
-                    <h3 class="text-gray-700 dark:text-gray-300 font-semibold mb-3"><i class="fas fa-chart-line mr-2 text-blue-500 dark:text-blue-400"></i><span data-i18n="ui.microphoneWaveform">麥克風音波</span></h3>
-                    <div class="canvas-wrapper bg-gray-50 dark:bg-gray-900/50 rounded-lg p-2">
-                        <canvas id="waveformCanvas" class="rounded"></canvas>
+                <!-- 即時語音模式的視覺化 -->
+                <div id="streamingVisualization">
+                    <div class="chart-container bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-xl shadow-lg border border-white/20 dark:border-gray-700/30 p-4">
+                        <h3 class="text-gray-700 dark:text-gray-300 font-semibold mb-3"><i class="fas fa-chart-line mr-2 text-blue-500 dark:text-blue-400"></i><span data-i18n="ui.microphoneWaveform">麥克風音波</span></h3>
+                        <div class="canvas-wrapper bg-gray-50 dark:bg-gray-900/50 rounded-lg p-2">
+                            <canvas id="waveformCanvas" class="rounded"></canvas>
+                        </div>
+                    </div>
+                    <div class="chart-container bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-xl shadow-lg border border-white/20 dark:border-gray-700/30 p-4 mt-2">
+                        <h3 class="text-gray-700 dark:text-gray-300 font-semibold mb-3"><i class="fas fa-brain mr-2 text-indigo-500 dark:text-indigo-400"></i><span data-i18n="ui.wakewordScore">喚醒詞偵測分數</span></h3>
+                        <div class="canvas-wrapper bg-gray-50 dark:bg-gray-900/50 rounded-lg p-2">
+                            <canvas id="wakewordCanvas" class="rounded"></canvas>
+                        </div>
                     </div>
                 </div>
-                <div class="chart-container bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-xl shadow-lg border border-white/20 dark:border-gray-700/30 p-4">
-                    <h3 class="text-gray-700 dark:text-gray-300 font-semibold mb-3"><i class="fas fa-brain mr-2 text-indigo-500 dark:text-indigo-400"></i><span data-i18n="ui.wakewordScore">喚醒詞偵測分數</span></h3>
-                    <div class="canvas-wrapper bg-gray-50 dark:bg-gray-900/50 rounded-lg p-2">
-                        <canvas id="wakewordCanvas" class="rounded"></canvas>
+                
+                <!-- 批次模式的檔案上傳/錄音區塊 -->
+                <div id="batchUploadPanel" class="flex flex-col h-full gap-2" style="display: none;">
+                    
+                    <!-- 檔案上傳和錄音控制（上方） -->
+                    <div class="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-xl shadow-lg border border-white/20 dark:border-gray-700/30 p-3 flex flex-col">
+                        <h3 class="text-gray-700 dark:text-gray-300 font-semibold mb-3">
+                            <i class="fas fa-file-upload mr-2 text-purple-500 dark:text-purple-400"></i>
+                            <span data-i18n="ui.fileUpload">檔案上傳 / 錄音轉譯</span>
+                        </h3>
+                        
+                        <!-- 檔案上傳與錄音並排 -->
+                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-2 mb-2">
+                            <!-- 檔案上傳區（縮小版） -->
+                            <div id="dropZone" class="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-2 text-center hover:border-blue-500 dark:hover:border-blue-400 transition-colors cursor-pointer">
+                                <i class="fas fa-cloud-upload-alt text-2xl text-gray-400 dark:text-gray-500 mb-1"></i>
+                                <p class="text-gray-600 dark:text-gray-400 text-sm">
+                                    <span data-i18n="ui.dropFiles">拖放音訊檔案至此處</span>
+                                </p>
+                                <p class="text-xs text-gray-500 dark:text-gray-500">
+                                    <span data-i18n="ui.supportedFormats">支援 MP3, WAV, M4A, WEBM</span>
+                                </p>
+                                <input type="file" id="audioFileInput" accept="audio/*" multiple style="display: none;">
+                            </div>
+                            
+                            <!-- 錄音控制（垂直排列） -->
+                            <div class="flex flex-col justify-center gap-1">
+                                <button id="batchRecordBtn" class="bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white px-3 py-1.5 rounded-lg shadow-md transition-all duration-200 hover:shadow-lg text-sm">
+                                    <i class="fas fa-microphone mr-2"></i><span data-i18n="ui.startRecording">開始錄音</span>
+                                </button>
+                                <button id="batchStopRecordBtn" class="bg-gradient-to-r from-gray-500 to-gray-600 hover:from-gray-600 hover:to-gray-700 text-white px-3 py-1.5 rounded-lg shadow-md transition-all duration-200 hover:shadow-lg text-sm" disabled>
+                                    <i class="fas fa-stop mr-2"></i><span data-i18n="ui.stopRecording">停止錄音</span>
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <!-- 轉譯引擎選擇 -->
+                        <div class="flex flex-col flex-1 min-h-0">
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                <i class="fas fa-cog mr-1"></i><span data-i18n="ui.transcriptionEngine">轉譯引擎</span>
+                            </label>
+                            
+                            <!-- 使用 grid 佈局，左側是引擎選項，右側是模型選擇 -->
+                            <div class="grid grid-cols-1 lg:grid-cols-[0.7fr,1fr] gap-3 items-start flex-1 min-h-0">
+                                <!-- 左側：Radio button 選項 (高度自適應內容) -->
+                                <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-2 self-start">
+                                    <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-2">
+                                        <i class="fas fa-broadcast-tower mr-1"></i>引擎選擇
+                                    </label>
+                                    <div class="space-y-2">
+                                        <label id="whisperEngineLabel" class="flex items-center p-2 rounded hover:bg-white dark:hover:bg-gray-600 cursor-pointer">
+                                            <input type="radio" name="engineSelect" value="whisper" class="mr-3 text-blue-600" checked>
+                                            <span id="whisperEngineName" class="text-gray-700 dark:text-gray-300 text-sm">Whisper (Base)</span>
+                                        </label>
+                                        
+                                        <label class="flex items-center p-2 rounded hover:bg-white dark:hover:bg-gray-600 cursor-pointer">
+                                            <input type="radio" name="engineSelect" value="webspeech" class="mr-3 text-blue-600">
+                                            <span class="text-gray-700 dark:text-gray-300 text-sm" data-i18n="ui.webSpeech">Web Speech API</span>
+                                        </label>
+                                        
+                                        <!-- Whisper 輸出模式選項 -->
+                                        <div id="whisperOutputModeOption" class="pl-8 mt-2 space-y-1">
+                                            <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
+                                                <i class="fas fa-stream mr-1"></i><span data-i18n="ui.outputMode">輸出模式</span>
+                                            </label>
+                                            <div class="flex gap-2">
+                                                <label class="flex items-center cursor-pointer">
+                                                    <input type="radio" name="whisperOutputMode" value="streaming" class="mr-2 text-blue-600" checked>
+                                                    <span class="text-xs text-gray-700 dark:text-gray-300" data-i18n="ui.streamingOutput">即時輸出</span>
+                                                </label>
+                                                <label class="flex items-center cursor-pointer">
+                                                    <input type="radio" name="whisperOutputMode" value="complete" class="mr-2 text-blue-600">
+                                                    <span class="text-xs text-gray-700 dark:text-gray-300" data-i18n="ui.completeOutput">完整輸出</span>
+                                                </label>
+                                            </div>
+                                        </div>
+                                        
+                                        <!-- Whisper 模型來源選項 -->
+                                        <div id="whisperModelSourceOption" class="pl-8 mt-2 space-y-1">
+                                            <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
+                                                <i class="fas fa-server mr-1"></i><span data-i18n="ui.modelSource">模型來源</span>
+                                            </label>
+                                            <div class="flex gap-2">
+                                                <label class="flex items-center cursor-pointer">
+                                                    <input type="radio" name="whisperModelSource" value="local" class="mr-2 text-blue-600" checked>
+                                                    <span class="text-xs text-gray-700 dark:text-gray-300" data-i18n="ui.localModel">本地模型</span>
+                                                </label>
+                                                <label class="flex items-center cursor-pointer">
+                                                    <input type="radio" name="whisperModelSource" value="remote" class="mr-2 text-blue-600">
+                                                    <span class="text-xs text-gray-700 dark:text-gray-300" data-i18n="ui.remoteModel">遠端模型</span>
+                                                </label>
+                                            </div>
+                                            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                                <i class="fas fa-info-circle mr-1"></i>
+                                                <span id="modelSourceHint" data-i18n="ui.localModelHint">本地模型速度更快，無需網路連線</span>
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- 右側：Whisper 模型選擇 (填滿高度) -->
+                                <div id="whisperModelSelection" class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-2 flex flex-col h-[400px] lg:h-full min-h-0 overflow-hidden" style="display:none;">
+                                    <!-- 標題區 (固定高度) -->
+                                    <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-2 flex-shrink-0">
+                                        <i class="fas fa-cube mr-1"></i>模型選擇
+                                    </label>
+                                    <!-- 列表區 (填滿剩餘高度並可捲動) -->
+                                    <div id="whisperModelList" class="space-y-1 overflow-y-auto flex-1 min-h-0">
+                                        <!-- 模型選項將動態生成 -->
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 麥克風音波圖（下方） -->
+                    <div id="batchWaveformContainer" class="chart-container bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-xl shadow-lg border border-white/20 dark:border-gray-700/30 p-4">
+                        <h3 class="text-gray-700 dark:text-gray-300 font-semibold mb-3"><i class="fas fa-chart-line mr-2 text-blue-500 dark:text-blue-400"></i><span data-i18n="ui.microphoneWaveform">麥克風音波</span></h3>
+                        <div class="canvas-wrapper bg-gray-50 dark:bg-gray-900/50 rounded-lg p-2 h-full">
+                            <canvas id="batchWaveformCanvas" class="rounded w-full h-full"></canvas>
+                        </div>
                     </div>
                 </div>
             </div>
 
-            <!-- 右側轉譯結果 -->
-            <div class="results-column bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-xl shadow-lg border border-white/20 dark:border-gray-700/30 p-4">
-                <div class="flex items-center justify-between mb-3">
-                    <h3 class="text-gray-700 dark:text-gray-300 font-semibold"><i class="fas fa-comment-dots mr-2 text-green-500 dark:text-green-400"></i><span data-i18n="ui.transcriptionResults">語音轉譯結果</span></h3>
-                    <div class="download-buttons flex gap-2">
-                        <button id="downloadTextBtn" class="btn btn-sm bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white px-3 py-1 rounded-lg shadow-sm transition-all duration-200 hover:shadow-md text-sm" disabled>
-                            <i class="fas fa-download mr-1"></i><span data-i18n="ui.downloadText">下載文字</span>
-                        </button>
-                        <button id="downloadAudioBtn" class="btn btn-sm bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white px-3 py-1 rounded-lg shadow-sm transition-all duration-200 hover:shadow-md text-sm" disabled>
-                            <i class="fas fa-file-audio mr-1"></i><span data-i18n="ui.downloadAudio">下載語音</span>
-                        </button>
+            <!-- 右側轉譯結果區 (統一顯示) -->
+            <div class="results-column" id="resultsColumn">
+                <!-- 即時語音結果 -->
+                <div id="streamingResults" class="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-xl shadow-lg border border-white/20 dark:border-gray-700/30 p-4">
+                    <div class="flex items-center justify-between mb-3">
+                        <h3 class="text-gray-700 dark:text-gray-300 font-semibold"><i class="fas fa-comment-dots mr-2 text-green-500 dark:text-green-400"></i><span data-i18n="ui.transcriptionResults">語音轉譯結果</span></h3>
+                        <div class="download-buttons flex gap-2">
+                            <button id="downloadTextBtn" class="btn btn-sm bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white px-3 py-1 rounded-lg shadow-sm transition-all duration-200 hover:shadow-md text-sm" disabled>
+                                <i class="fas fa-download mr-1"></i><span data-i18n="ui.downloadText">下載文字</span>
+                            </button>
+                            <button id="downloadAudioBtn" class="btn btn-sm bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white px-3 py-1 rounded-lg shadow-sm transition-all duration-200 hover:shadow-md text-sm" disabled>
+                                <i class="fas fa-file-audio mr-1"></i><span data-i18n="ui.downloadAudio">下載語音</span>
+                            </button>
+                        </div>
+                    </div>
+                    <div id="transcriptionResults" class="results-container bg-gray-50 dark:bg-gray-900/50 rounded-lg">
+                        <p class="placeholder text-gray-500 dark:text-gray-400 text-center py-8"><i class="fas fa-microphone-slash mr-2"></i><span data-i18n="ui.waitingForInput">等待語音輸入...</span></p>
                     </div>
                 </div>
-                <div id="transcriptionResults" class="results-container bg-gray-50 dark:bg-gray-900/50 rounded-lg">
-                    <p class="placeholder text-gray-500 dark:text-gray-400 text-center py-8"><i class="fas fa-microphone-slash mr-2"></i><span data-i18n="ui.waitingForInput">等待語音輸入...</span></p>
+                
+                <!-- 批次模式結果 -->
+                <div id="batchResults" class="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-xl shadow-lg border border-white/20 dark:border-gray-700/30 p-4 overflow-hidden flex flex-col" style="display: none;">
+                    <div class="flex items-center justify-between mb-3">
+                        <h3 class="text-gray-700 dark:text-gray-300 font-semibold"><i class="fas fa-file-alt mr-2 text-green-500 dark:text-green-400"></i><span data-i18n="ui.batchResults">批次轉譯結果</span></h3>
+                        <div class="download-buttons flex gap-2">
+                            <button id="batchDownloadTextBtn" class="btn btn-sm bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white px-3 py-1 rounded-lg shadow-sm transition-all duration-200 hover:shadow-md text-sm" disabled>
+                                <i class="fas fa-download mr-1"></i><span data-i18n="ui.downloadAllText">下載所有文字</span>
+                            </button>
+                            <button id="batchDownloadAudioBtn" class="btn btn-sm bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white px-3 py-1 rounded-lg shadow-sm transition-all duration-200 hover:shadow-md text-sm" style="display: none;">
+                                <i class="fas fa-file-audio mr-1"></i><span data-i18n="ui.downloadRecording">下載錄音</span>
+                            </button>
+                        </div>
+                    </div>
+                    <div id="batchResultsContainer" class="results-container bg-gray-50 dark:bg-gray-900/50 rounded-lg overflow-y-auto">
+                        <p class="placeholder text-gray-500 dark:text-gray-400 text-center py-8">
+                            <i class="fas fa-file-alt mr-2"></i><span data-i18n="ui.noFiles">尚無檔案</span>
+                        </p>
+                    </div>
                 </div>
             </div>
         </div>
@@ -158,7 +320,16 @@
     <script src="js/core/vad.js"></script>
     <script src="js/core/speech.js"></script>
     
+    <!-- 模組預載入（支援離線模式） -->
+    <link rel="modulepreload" href="js/utils/audio-decoder.js">
+    <link rel="modulepreload" href="js/modules/speech-recognition-manager.js">
+    <link rel="modulepreload" href="js/modules/engines/webspeech-engine.js">
+    <link rel="modulepreload" href="js/modules/engines/whisper-engine.js">
+    <link rel="modulepreload" href="js/modules/audio-pipeline.js">
+    <link rel="modulepreload" href="js/modules/audio-input-manager.js">
+    <link rel="modulepreload" href="js/modules/audio-worklet-processor.js">
+    
     <!-- 主程式 -->
-    <script src="js/main.js"></script>
+    <script type="module" src="js/main.js"></script>
 </body>
 </html>

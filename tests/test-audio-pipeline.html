@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>音訊管道測試</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .diagnostic-report {
+            font-family: monospace;
+            white-space: pre-wrap;
+        }
+        .recommendation.critical { color: red; }
+        .recommendation.warning { color: orange; }
+        .recommendation.info { color: blue; }
+    </style>
+</head>
+<body class="bg-gray-100">
+    <div class="container mx-auto p-8">
+        <h1 class="text-3xl font-bold mb-6">音訊管道測試與診斷</h1>
+        
+        <!-- 控制按鈕 -->
+        <div class="bg-white rounded-lg shadow p-6 mb-6">
+            <h2 class="text-xl font-semibold mb-4">控制面板</h2>
+            <div class="flex gap-4">
+                <button id="diagnoseBtn" class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">
+                    執行診斷
+                </button>
+                <button id="startBtn" class="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600">
+                    開始音訊
+                </button>
+                <button id="stopBtn" class="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600" disabled>
+                    停止音訊
+                </button>
+            </div>
+        </div>
+        
+        <!-- 診斷報告 -->
+        <div class="bg-white rounded-lg shadow p-6 mb-6">
+            <h2 class="text-xl font-semibold mb-4">診斷報告</h2>
+            <div id="diagnosticReport" class="diagnostic-report"></div>
+        </div>
+        
+        <!-- 即時資訊 -->
+        <div class="bg-white rounded-lg shadow p-6 mb-6">
+            <h2 class="text-xl font-semibold mb-4">即時音訊資訊</h2>
+            <div id="audioInfo" class="space-y-2">
+                <p>等待啟動...</p>
+            </div>
+        </div>
+        
+        <!-- 音訊視覺化 -->
+        <div class="bg-white rounded-lg shadow p-6">
+            <h2 class="text-xl font-semibold mb-4">音訊波形</h2>
+            <canvas id="waveform" width="800" height="200" class="w-full border"></canvas>
+        </div>
+    </div>
+
+    <script type="module">
+        import { AudioInputManager } from './js/modules/audio-input-manager.js';
+        import { AudioCompatibilityManager } from './js/modules/audio-compatibility-manager.js';
+        import { AudioPipelineIntegration } from './js/modules/audio-pipeline-integration.js';
+        
+        // 初始化
+        const pipeline = new AudioPipelineIntegration();
+        const compatibilityManager = new AudioCompatibilityManager();
+        
+        let isRunning = false;
+        let animationId = null;
+        
+        // DOM 元素
+        const diagnoseBtn = document.getElementById('diagnoseBtn');
+        const startBtn = document.getElementById('startBtn');
+        const stopBtn = document.getElementById('stopBtn');
+        const diagnosticReport = document.getElementById('diagnosticReport');
+        const audioInfo = document.getElementById('audioInfo');
+        const canvas = document.getElementById('waveform');
+        const ctx = canvas.getContext('2d');
+        
+        // 音訊緩衝
+        let audioBuffer = new Float32Array(1280);
+        let bufferIndex = 0;
+        
+        // 診斷按鈕
+        diagnoseBtn.addEventListener('click', async () => {
+            diagnoseBtn.disabled = true;
+            diagnoseBtn.textContent = '診斷中...';
+            
+            try {
+                const diagnostics = await compatibilityManager.diagnoseAudioCapabilities();
+                diagnosticReport.innerHTML = compatibilityManager.generateDiagnosticHTML();
+                
+                // 顯示原始資料（調試用）
+                console.log('完整診斷報告:', diagnostics);
+                
+            } catch (error) {
+                diagnosticReport.innerHTML = `<p class="text-red-500">診斷失敗: ${error.message}</p>`;
+            } finally {
+                diagnoseBtn.disabled = false;
+                diagnoseBtn.textContent = '執行診斷';
+            }
+        });
+        
+        // 開始按鈕
+        startBtn.addEventListener('click', async () => {
+            startBtn.disabled = true;
+            
+            try {
+                const result = await pipeline.initialize({
+                    onDiagnostics: (diag) => {
+                        console.log('初始化診斷:', diag);
+                    }
+                });
+                
+                // 顯示音訊資訊
+                updateAudioInfo(result);
+                
+                // 開始處理音訊
+                await pipeline.startProcessing((data, stats) => {
+                    processAudioData(data, stats);
+                });
+                
+                isRunning = true;
+                stopBtn.disabled = false;
+                
+                // 開始動畫
+                animate();
+                
+            } catch (error) {
+                alert('啟動失敗: ' + error.message);
+                startBtn.disabled = false;
+            }
+        });
+        
+        // 停止按鈕
+        stopBtn.addEventListener('click', async () => {
+            await pipeline.stop();
+            isRunning = false;
+            
+            if (animationId) {
+                cancelAnimationFrame(animationId);
+                animationId = null;
+            }
+            
+            startBtn.disabled = false;
+            stopBtn.disabled = true;
+            
+            audioInfo.innerHTML = '<p>已停止</p>';
+        });
+        
+        // 處理音訊資料
+        function processAudioData(data, stats) {
+            // 將資料複製到緩衝區
+            if (data instanceof Int16Array) {
+                for (let i = 0; i < data.length && bufferIndex < audioBuffer.length; i++) {
+                    audioBuffer[bufferIndex++] = data[i] / 32768.0;
+                }
+            } else {
+                for (let i = 0; i < data.length && bufferIndex < audioBuffer.length; i++) {
+                    audioBuffer[bufferIndex++] = data[i];
+                }
+            }
+            
+            // 緩衝區滿了就重置
+            if (bufferIndex >= audioBuffer.length) {
+                bufferIndex = 0;
+            }
+        }
+        
+        // 更新音訊資訊顯示
+        function updateAudioInfo(result) {
+            const { audioInfo, strategy } = result;
+            
+            let html = '<div class="space-y-2">';
+            html += `<p><strong>採樣率:</strong> ${audioInfo.actualSpec.sampleRate || 'unknown'} Hz</p>`;
+            html += `<p><strong>聲道數:</strong> ${audioInfo.actualSpec.channelCount || 'unknown'}</p>`;
+            html += `<p><strong>需要轉換:</strong> ${audioInfo.needsConversion ? '是' : '否'}</p>`;
+            
+            if (strategy && strategy.operations.length > 0) {
+                html += '<p><strong>轉換操作:</strong></p>';
+                html += '<ul class="ml-4">';
+                strategy.operations.forEach(op => {
+                    html += `<li>• ${op.type}: ${op.from} → ${op.to}</li>`;
+                });
+                html += '</ul>';
+                html += `<p><strong>預估延遲:</strong> ${strategy.estimatedLatency} ms</p>`;
+            }
+            
+            html += '</div>';
+            audioInfo.innerHTML = html;
+        }
+        
+        // 繪製波形
+        function drawWaveform() {
+            ctx.fillStyle = '#f0f0f0';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            ctx.strokeStyle = '#3b82f6';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            
+            const step = canvas.width / audioBuffer.length;
+            const midY = canvas.height / 2;
+            
+            for (let i = 0; i < audioBuffer.length; i++) {
+                const x = i * step;
+                const y = midY + (audioBuffer[i] * midY * 0.8);
+                
+                if (i === 0) {
+                    ctx.moveTo(x, y);
+                } else {
+                    ctx.lineTo(x, y);
+                }
+            }
+            
+            ctx.stroke();
+            
+            // 繪製中線
+            ctx.strokeStyle = '#d1d5db';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(0, midY);
+            ctx.lineTo(canvas.width, midY);
+            ctx.stroke();
+        }
+        
+        // 動畫循環
+        function animate() {
+            if (!isRunning) return;
+            
+            drawWaveform();
+            animationId = requestAnimationFrame(animate);
+        }
+        
+        // 初始繪製
+        drawWaveform();
+    </script>
+</body>
+</html>

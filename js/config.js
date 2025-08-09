@@ -31,7 +31,7 @@ const Config = {
       hangoverFrames: 12
     },
     whisper: {
-      default: 'whisper-tiny',
+      default: 'whisper-base',
       available: {} // Will be populated from registry
     }
   },
@@ -75,6 +75,10 @@ const Config = {
     continuous: true,
     interimResults: true,
     maxAlternatives: 1,
+    // Whisper output mode: 'streaming' for real-time updates, 'complete' for final result only
+    whisperOutputMode: 'streaming',
+    // Whisper model source: 'local' for local models, 'remote' for Hugging Face models
+    whisperModelSource: 'local',
     languages: {
       'zh-TW': '繁體中文',
       'en-US': 'English',
@@ -263,13 +267,37 @@ const Config = {
         case 'asr':
           // Whisper model configuration
           if (model.id.startsWith('whisper')) {
+            // 標準模型
             this.models.whisper.available[model.id] = {
               path: fullPath,
               name: model.name,
               size: model.specs?.size_mb || 0,
               multilingual: model.features?.multilingual || false,
-              description: model.description
+              description: model.description,
+              quantized: false,
+              files: model.files
             };
+            
+            // 檢查是否有 quantized 版本
+            if (model.files && model.files.optional) {
+              const hasQuantized = model.files.optional.some(f => 
+                f.includes('quantized')
+              );
+              
+              if (hasQuantized) {
+                // 添加 quantized 版本作為獨立選項
+                const quantizedId = model.id + '-quantized';
+                this.models.whisper.available[quantizedId] = {
+                  path: fullPath,
+                  name: model.name + ' (Quantized)',
+                  size: Math.round((model.specs?.size_mb || 0) * 0.25), // 量化版本通常較小
+                  multilingual: model.features?.multilingual || false,
+                  description: model.description + ' - 量化版本，速度更快但準確度略低',
+                  quantized: true,
+                  files: model.files
+                };
+              }
+            }
           }
           break;
       }
@@ -326,9 +354,9 @@ const Config = {
     
     // Fallback Whisper models
     this.models.whisper.available = {
-      'whisper-tiny': {
-        path: 'models/huggingface/Xenova/whisper-tiny',
-        name: 'Whisper Tiny',
+      'whisper-base': {
+        path: 'models/huggingface/Xenova/whisper-base',
+        name: 'Whisper Base',
         size: 39,
         multilingual: true
       }

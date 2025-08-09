@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>整合測試頁面</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 p-8">
+    <div class="max-w-6xl mx-auto">
+        <h1 class="text-3xl font-bold mb-8 text-center">語音轉譯系統測試</h1>
+        
+        <!-- 快速測試連結 -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            <!-- 主應用程式 -->
+            <div class="bg-white rounded-lg shadow-md p-6">
+                <h2 class="text-xl font-semibold mb-3">主應用程式</h2>
+                <p class="text-gray-600 mb-4">即時語音和批次處理雙模式</p>
+                <a href="index.html" class="block w-full bg-blue-600 hover:bg-blue-700 text-white text-center py-2 px-4 rounded">
+                    開啟主應用
+                </a>
+            </div>
+            
+            <!-- 檔案上傳測試 -->
+            <div class="bg-white rounded-lg shadow-md p-6">
+                <h2 class="text-xl font-semibold mb-3">檔案上傳測試</h2>
+                <p class="text-gray-600 mb-4">測試音訊檔案轉譯功能</p>
+                <a href="test-file-upload.html" class="block w-full bg-purple-600 hover:bg-purple-700 text-white text-center py-2 px-4 rounded">
+                    檔案上傳測試
+                </a>
+            </div>
+            
+            <!-- 其他測試頁面 -->
+            <div class="bg-white rounded-lg shadow-md p-6">
+                <h2 class="text-xl font-semibold mb-3">其他測試</h2>
+                <p class="text-gray-600 mb-4">各種功能測試頁面</p>
+                <div class="space-y-2">
+                    <a href="test-streaming.html" class="block w-full bg-green-600 hover:bg-green-700 text-white text-center py-2 px-4 rounded text-sm">
+                        串流測試
+                    </a>
+                    <a href="test-worker-architecture.html" class="block w-full bg-orange-600 hover:bg-orange-700 text-white text-center py-2 px-4 rounded text-sm">
+                        Worker 架構測試
+                    </a>
+                    <a href="test-audio-pipeline.html" class="block w-full bg-red-600 hover:bg-red-700 text-white text-center py-2 px-4 rounded text-sm">
+                        音訊管道測試
+                    </a>
+                    <a href="test-web-speech-latency.html" class="block w-full bg-indigo-600 hover:bg-indigo-700 text-white text-center py-2 px-4 rounded text-sm">
+                        Web Speech 延遲測試
+                    </a>
+                    <a href="test-mode-switching.html" class="block w-full bg-yellow-600 hover:bg-yellow-700 text-white text-center py-2 px-4 rounded text-sm">
+                        模式切換測試
+                    </a>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 功能檢查清單 -->
+        <div class="bg-white rounded-lg shadow-md p-6">
+            <h2 class="text-xl font-semibold mb-4">功能檢查清單</h2>
+            <div class="space-y-3">
+                <div class="flex items-center">
+                    <input type="checkbox" id="check1" class="mr-3">
+                    <label for="check1">✅ 即時語音模式 - 喚醒詞偵測</label>
+                </div>
+                <div class="flex items-center">
+                    <input type="checkbox" id="check2" class="mr-3">
+                    <label for="check2">✅ 即時語音模式 - Web Speech API 轉譯</label>
+                </div>
+                <div class="flex items-center">
+                    <input type="checkbox" id="check3" class="mr-3">
+                    <label for="check3">✅ 批次模式 - 檔案上傳</label>
+                </div>
+                <div class="flex items-center">
+                    <input type="checkbox" id="check4" class="mr-3">
+                    <label for="check4">✅ 批次模式 - 錄音功能</label>
+                </div>
+                <div class="flex items-center">
+                    <input type="checkbox" id="check5" class="mr-3">
+                    <label for="check5">✅ 批次模式 - Whisper 轉譯</label>
+                </div>
+                <div class="flex items-center">
+                    <input type="checkbox" id="check6" class="mr-3">
+                    <label for="check6">✅ 模式切換功能</label>
+                </div>
+                <div class="flex items-center">
+                    <input type="checkbox" id="check7" class="mr-3">
+                    <label for="check7">✅ i18n 多語言支援</label>
+                </div>
+                <div class="flex items-center">
+                    <input type="checkbox" id="check8" class="mr-3">
+                    <label for="check8">✅ 主題切換（深色/淺色）</label>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 狀態檢查 -->
+        <div class="bg-white rounded-lg shadow-md p-6 mt-6">
+            <h2 class="text-xl font-semibold mb-4">系統狀態檢查</h2>
+            <div id="statusChecks" class="space-y-2">
+                <p class="text-gray-600">檢查中...</p>
+            </div>
+        </div>
+    </div>
+    
+    <script type="module">
+        // 檢查系統狀態
+        async function checkSystemStatus() {
+            const statusDiv = document.getElementById('statusChecks');
+            const checks = [];
+            
+            // 檢查 Web Speech API
+            if ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window) {
+                checks.push('✅ Web Speech API 支援');
+            } else {
+                checks.push('❌ Web Speech API 不支援');
+            }
+            
+            // 檢查 Web Audio API
+            if ('AudioContext' in window || 'webkitAudioContext' in window) {
+                checks.push('✅ Web Audio API 支援');
+            } else {
+                checks.push('❌ Web Audio API 不支援');
+            }
+            
+            // 檢查 WebAssembly
+            if ('WebAssembly' in window) {
+                checks.push('✅ WebAssembly 支援');
+            } else {
+                checks.push('❌ WebAssembly 不支援');
+            }
+            
+            // 檢查 WebGPU
+            if ('gpu' in navigator) {
+                checks.push('✅ WebGPU 支援（實驗性）');
+            } else {
+                checks.push('⚠️ WebGPU 不支援（將使用 WASM）');
+            }
+            
+            // 檢查 Worker
+            if ('Worker' in window) {
+                checks.push('✅ Web Worker 支援');
+            } else {
+                checks.push('❌ Web Worker 不支援');
+            }
+            
+            // 檢查安全上下文
+            if (window.isSecureContext) {
+                checks.push('✅ 安全上下文（HTTPS/localhost）');
+            } else {
+                checks.push('❌ 非安全上下文（需要 HTTPS）');
+            }
+            
+            // 檢查麥克風權限
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                stream.getTracks().forEach(track => track.stop());
+                checks.push('✅ 麥克風權限可用');
+            } catch (error) {
+                checks.push('⚠️ 麥克風權限未授予或不可用');
+            }
+            
+            statusDiv.innerHTML = checks.map(check => `<p>${check}</p>`).join('');
+        }
+        
+        // 頁面載入時執行檢查
+        window.addEventListener('DOMContentLoaded', checkSystemStatus);
+    </script>
+</body>
+</html>

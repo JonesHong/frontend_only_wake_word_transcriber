@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Whisper 串流輸出測試</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 min-h-screen flex items-center justify-center">
+    <div class="bg-white rounded-lg shadow-lg p-8 max-w-2xl w-full">
+        <h1 class="text-2xl font-bold mb-6 text-center">🎙️ Whisper 串流轉譯測試</h1>
+        
+        <div class="mb-6">
+            <label class="block text-sm font-medium text-gray-700 mb-2">
+                選擇音訊檔案進行轉譯
+            </label>
+            <input type="file" id="fileInput" accept="audio/*" 
+                   class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+        </div>
+        
+        <div class="mb-6">
+            <label class="block text-sm font-medium text-gray-700 mb-2">語言</label>
+            <select id="languageSelect" class="w-full px-3 py-2 border border-gray-300 rounded-md">
+                <option value="zh-TW">中文（臺灣）</option>
+                <option value="en-US">English (US)</option>
+                <option value="ja-JP">日本語</option>
+            </select>
+        </div>
+        
+        <div id="progressSection" class="mb-6 hidden">
+            <div class="flex justify-between text-sm mb-1">
+                <span>載入進度</span>
+                <span id="progressText">0%</span>
+            </div>
+            <div class="w-full bg-gray-200 rounded-full h-2">
+                <div id="progressBar" class="bg-blue-500 h-2 rounded-full transition-all" style="width: 0%"></div>
+            </div>
+        </div>
+        
+        <div class="mb-6">
+            <label class="block text-sm font-medium text-gray-700 mb-2">
+                轉譯結果（串流輸出）
+            </label>
+            <div id="transcriptionOutput" class="min-h-[200px] p-4 border border-gray-300 rounded-md bg-gray-50">
+                <div class="text-gray-400">請選擇檔案開始轉譯...</div>
+            </div>
+        </div>
+        
+        <div class="bg-blue-50 border border-blue-200 rounded-md p-4">
+            <h3 class="font-semibold text-blue-900 mb-2">測試說明</h3>
+            <ul class="text-sm text-blue-800 space-y-1">
+                <li>• 上傳音訊檔案後會自動開始轉譯</li>
+                <li>• 文字會即時串流顯示（不是等全部完成才顯示）</li>
+                <li>• 藍色游標表示正在轉譯中</li>
+                <li>• 支援 MP3、WAV、OGG 等格式</li>
+            </ul>
+        </div>
+    </div>
+    
+    <script type="module">
+        import { WhisperEngine } from './js/modules/engines/whisper-engine.js';
+        
+        const fileInput = document.getElementById('fileInput');
+        const languageSelect = document.getElementById('languageSelect');
+        const transcriptionOutput = document.getElementById('transcriptionOutput');
+        const progressSection = document.getElementById('progressSection');
+        const progressText = document.getElementById('progressText');
+        const progressBar = document.getElementById('progressBar');
+        
+        let engine = null;
+        let currentTranscription = '';
+        
+        async function initializeEngine() {
+            engine = new WhisperEngine();
+            
+            // 設定事件監聽器
+            engine.on('loadProgress', (data) => {
+                console.log('Model loading progress:', data);
+                progressSection.classList.remove('hidden');
+                progressText.textContent = `${data.progress}%`;
+                progressBar.style.width = `${data.progress}%`;
+            });
+            
+            engine.on('modelLoaded', () => {
+                console.log('Model loaded successfully');
+                setTimeout(() => {
+                    progressSection.classList.add('hidden');
+                }, 1000);
+            });
+            
+            // 串流更新監聽器
+            engine.on('interimTranscription', (data) => {
+                console.log('Streaming update:', data);
+                updateTranscriptionDisplay(data, true);
+            });
+            
+            engine.on('result', (data) => {
+                console.log('Final result:', data);
+                updateTranscriptionDisplay(data, false);
+            });
+            
+            engine.on('error', (error) => {
+                console.error('Engine error:', error);
+                transcriptionOutput.innerHTML = `<div class="text-red-500">錯誤: ${error.message}</div>`;
+            });
+            
+            await engine.initialize({
+                language: 'zh'
+            });
+            
+            console.log('Engine initialized');
+        }
+        
+        function updateTranscriptionDisplay(data, isStreaming) {
+            const text = data.transcript || '';
+            const chunks = data.chunks || [];
+            
+            if (chunks.length > 0) {
+                // 顯示分段結果（像參考實現那樣）
+                let html = '<div class="space-y-2">';
+                chunks.forEach(chunk => {
+                    const timestamp = chunk.timestamp ? formatTimestamp(chunk.timestamp[0]) : '';
+                    html += `
+                        <div class="flex items-start gap-3 p-2 bg-gray-50 rounded">
+                            <span class="text-sm text-gray-500 font-mono">${timestamp}</span>
+                            <span class="text-gray-800">${chunk.text || ''}</span>
+                        </div>
+                    `;
+                });
+                
+                if (isStreaming) {
+                    html += '<span class="inline-block ml-2 w-2 h-4 bg-blue-500 animate-pulse"></span>';
+                }
+                html += '</div>';
+                transcriptionOutput.innerHTML = html;
+            } else if (text) {
+                // 沒有分段時顯示完整文字
+                transcriptionOutput.innerHTML = `
+                    <div class="text-gray-800">
+                        ${text}
+                        ${isStreaming ? '<span class="inline-block ml-1 w-2 h-4 bg-blue-500 animate-pulse"></span>' : ''}
+                    </div>
+                `;
+            } else {
+                // 無內容
+                transcriptionOutput.innerHTML = `
+                    <div class="text-gray-400">${isStreaming ? '轉譯中...' : '（無內容）'}</div>
+                `;
+            }
+        }
+        
+        function formatTimestamp(seconds) {
+            const minutes = Math.floor(seconds / 60);
+            const secs = Math.floor(seconds % 60);
+            return `${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+        }
+        
+        async function handleFileUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            
+            console.log('Processing file:', file.name);
+            
+            // 重置顯示
+            currentTranscription = '';
+            transcriptionOutput.innerHTML = '<div class="text-gray-500">開始轉譯...</div>';
+            
+            try {
+                const result = await engine.transcribeFile(file, {
+                    language: languageSelect.value
+                });
+                
+                console.log('Transcription complete:', result);
+                
+            } catch (error) {
+                console.error('Transcription error:', error);
+                transcriptionOutput.innerHTML = `<div class="text-red-500">轉譯失敗: ${error.message}</div>`;
+            }
+        }
+        
+        // 初始化
+        initializeEngine().catch(console.error);
+        
+        // 事件綁定
+        fileInput.addEventListener('change', handleFileUpload);
+    </script>
+</body>
+</html>

@@ -20,6 +20,7 @@ class Visualizer {
         // 取得 Canvas 元素
         this.waveformCanvas = document.getElementById('waveformCanvas');
         this.wakewordCanvas = document.getElementById('wakewordCanvas');
+        this.batchWaveformCanvas = document.getElementById('batchWaveformCanvas');
         
         if (!this.waveformCanvas || !this.wakewordCanvas) {
             console.error('找不到視覺化 Canvas 元素');
@@ -29,6 +30,9 @@ class Visualizer {
         // 取得繪圖上下文
         this.waveformCtx = this.waveformCanvas.getContext('2d');
         this.wakewordCtx = this.wakewordCanvas.getContext('2d');
+        if (this.batchWaveformCanvas) {
+            this.batchWaveformCtx = this.batchWaveformCanvas.getContext('2d');
+        }
         
         // 設定 Canvas 大小
         this.resizeCanvases();
@@ -42,15 +46,27 @@ class Visualizer {
     
     resizeCanvases() {
         // 設定實際像素大小
-        const waveformRect = this.waveformCanvas.getBoundingClientRect();
-        this.waveformCanvas.width = waveformRect.width * window.devicePixelRatio;
-        this.waveformCanvas.height = waveformRect.height * window.devicePixelRatio;
-        this.waveformCtx.scale(window.devicePixelRatio, window.devicePixelRatio);
+        if (this.waveformCanvas) {
+            const waveformRect = this.waveformCanvas.getBoundingClientRect();
+            this.waveformCanvas.width = waveformRect.width * window.devicePixelRatio;
+            this.waveformCanvas.height = waveformRect.height * window.devicePixelRatio;
+            this.waveformCtx.scale(window.devicePixelRatio, window.devicePixelRatio);
+        }
         
-        const wakewordRect = this.wakewordCanvas.getBoundingClientRect();
-        this.wakewordCanvas.width = wakewordRect.width * window.devicePixelRatio;
-        this.wakewordCanvas.height = wakewordRect.height * window.devicePixelRatio;
-        this.wakewordCtx.scale(window.devicePixelRatio, window.devicePixelRatio);
+        if (this.wakewordCanvas) {
+            const wakewordRect = this.wakewordCanvas.getBoundingClientRect();
+            this.wakewordCanvas.width = wakewordRect.width * window.devicePixelRatio;
+            this.wakewordCanvas.height = wakewordRect.height * window.devicePixelRatio;
+            this.wakewordCtx.scale(window.devicePixelRatio, window.devicePixelRatio);
+        }
+        
+        // 設定批次模式 canvas
+        if (this.batchWaveformCanvas && this.batchWaveformCanvas.offsetParent !== null) {
+            const batchRect = this.batchWaveformCanvas.getBoundingClientRect();
+            this.batchWaveformCanvas.width = batchRect.width * window.devicePixelRatio;
+            this.batchWaveformCanvas.height = batchRect.height * window.devicePixelRatio;
+            this.batchWaveformCtx.scale(window.devicePixelRatio, window.devicePixelRatio);
+        }
     }
     
     start() {
@@ -72,11 +88,18 @@ class Visualizer {
     animate() {
         if (!this.isRunning) return;
         
-        // 繪製音波圖
+        // 繪製主要音波圖
         this.drawWaveform();
         
-        // 繪製喚醒詞分數圖
-        this.drawWakewordScore();
+        // 如果批次 canvas 存在且可見，也繪製到批次 canvas
+        if (this.batchWaveformCanvas && this.batchWaveformCanvas.offsetParent !== null) {
+            this.drawWaveform(true);
+        }
+        
+        // 繪製喚醒詞分數圖（只在即時模式且 canvas 可見時）
+        if (this.wakewordCanvas && this.wakewordCanvas.offsetParent !== null) {
+            this.drawWakewordScore();
+        }
         
         // 下一幀
         this.animationId = requestAnimationFrame(() => this.animate());
@@ -108,10 +131,15 @@ class Visualizer {
         }
     }
     
-    drawWaveform() {
-        const ctx = this.waveformCtx;
-        const width = this.waveformCanvas.width / window.devicePixelRatio;
-        const height = this.waveformCanvas.height / window.devicePixelRatio;
+    drawWaveform(useBatchCanvas = false) {
+        const ctx = useBatchCanvas && this.batchWaveformCtx ? this.batchWaveformCtx : this.waveformCtx;
+        const canvas = useBatchCanvas && this.batchWaveformCanvas ? this.batchWaveformCanvas : this.waveformCanvas;
+        
+        // 如果沒有對應的 canvas，使用主要的 waveformCanvas
+        if (!canvas) return;
+        
+        const width = canvas.width / window.devicePixelRatio;
+        const height = canvas.height / window.devicePixelRatio;
         
         // 檢查是否為深色模式
         const isDark = window.themeManager && window.themeManager.isDarkMode();

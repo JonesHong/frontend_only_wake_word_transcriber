@@ -37,6 +37,8 @@ body {
 /* 容器樣式 */
 .container {
     width: 100%;
+    max-width: 1400px;
+    margin: 0 auto;
     min-height: 100vh;
     padding: 10px;
     display: flex;
@@ -48,6 +50,7 @@ body {
     .container {
         height: 100vh;
         overflow: hidden;
+        padding: 20px;
     }
 }
 
@@ -212,28 +215,90 @@ body {
     gap: 12px;
     flex: 1;
     min-height: 400px;
+    width: 100%;
+    margin: 0 auto;
 }
 
-/* 桌面版固定高度 */
+/* 桌面版調整 - 讓內容填滿畫面 */
 @media (min-width: 1025px) {
     .main-content {
         min-height: 0;
-        height: calc(100vh - 110px);
+        height: calc(100vh - 200px); /* 扣除 header 高度，讓內容填滿 */
     }
 }
 
 /* 視覺化欄位 */
 .visualization-column {
-    flex: 1.5;
+    flex: 0.75; /* 左側欄位使用 0.75:1 比例 (約43%:57%) */
     display: flex;
     flex-direction: column;
+    gap: 12px; /* 加入間隙 */
+    min-height: 0; /* 允許內容收縮 */
+    overflow: hidden; /* 防止內容溢出 */
+}
+
+/* 已移除不需要的 flex 比例類別 - 現在使用兩欄佈局 */
+
+/* 即時模式的視覺化容器 */
+#streamingVisualization {
+    display: flex;
+    flex-direction: column;
+    gap: 12px; /* 圖表之間的間隙 */
+    height: 100%; /* 填滿父容器 */
+}
+
+/* 批次模式上傳面板 */
+#batchUploadPanel {
+    display: flex;
+    flex-direction: column;
+    gap: 8px; /* 更小的間距 */
+    height: 100%; /* 填滿父容器 */
+    min-height: 0; /* 允許內容收縮 */
+    overflow: hidden; /* 防止溢出 */
+}
+
+/* 批次模式左側欄的上下兩個區塊 */
+#batchUploadPanel > div:first-child {
+    flex: 2; /* 檔案上傳區塊佔 2/3 高度 */
+    min-height: 0; /* 允許縮放 */
+    display: flex;
+    flex-direction: column;
+    overflow: hidden; /* 防止內容溢出 */
+}
+
+#batchUploadPanel > #batchWaveformContainer {
+    flex: 1; /* 音波圖區塊佔 1/3 高度 */
+    min-height: 150px; /* 最小高度保證可見 */
+}
+
+/* 轉譯引擎選擇區塊優化 */
+#whisperModelSelection {
+    /* 使用 flexbox 讓內部列表填滿空間 */
+    display: flex;
+    flex-direction: column;
+    /* 移除固定高度，讓它填滿可用空間 */
+    min-height: 0;
+    overflow: hidden;
+    position: relative;
+}
+
+#whisperModelList {
+    /* 填滿剩餘空間 */
+    flex: 1;
+    min-height: 0;
+    max-height: 100%; /* 限制最大高度 */
+    overflow-y: auto;
+    overflow-x: hidden;
+    /* 確保捲動生效 */
+    position: relative;
+    -webkit-overflow-scrolling: touch; /* 改善觸控裝置捲動 */
 }
 
 .chart-container {
-    flex: 1;
+    flex: 1; /* 平均分配可用空間 */
     display: flex;
     flex-direction: column;
-    min-height: 0;
+    min-height: 150px; /* 最小高度 */
 }
 
 .chart-container h3::before {
@@ -247,9 +312,38 @@ body {
 
 .canvas-wrapper {
     width: 100%;
-    height: calc(100% - 35px);
+    flex: 1; /* 填滿剩餘空間 */
     min-height: 100px;
     position: relative;
+}
+
+/* 結果欄位也要填滿 */
+.results-column {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+#streamingResults,
+#batchResults {
+    flex: 1; /* 填滿可用空間 */
+    display: flex;
+    flex-direction: column;
+}
+
+.results-container {
+    flex: 1; /* 填滿剩餘空間 */
+    overflow-y: auto;
+    border: 1px solid var(--border-color);
+    padding: 16px;
+    min-height: 300px; /* 設定最小高度 */
+}
+
+/* 批次結果容器特別調整 */
+#batchResultsContainer {
+    max-height: none; /* 移除最大高度限制 */
+    height: calc(100% - 50px); /* 扣除標題高度後填滿 */
 }
 
 canvas {
@@ -259,14 +353,6 @@ canvas {
     border: 1px solid var(--border-color);
 }
 
-/* 結果欄位 */
-.results-column {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    min-height: 0;
-}
-
 .results-column h3::before {
     content: '';
     width: 3px;
@@ -274,14 +360,6 @@ canvas {
     background: currentColor;
     border-radius: 2px;
     margin-right: 8px;
-}
-
-.results-container {
-    flex: 1;
-    overflow-y: auto;
-    border: 1px solid #e5e5ea;
-    padding: 12px;
-    max-height: calc(100% - 40px);
 }
 
 /* 轉譯項目樣式 */

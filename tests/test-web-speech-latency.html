@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Web Speech API 延遲測試</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body class="bg-gray-100 p-8">
+    <div class="max-w-4xl mx-auto">
+        <h1 class="text-3xl font-bold mb-8 text-center">Web Speech API 延遲測試</h1>
+        
+        <!-- 測試控制 -->
+        <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+            <h2 class="text-xl font-semibold mb-4">測試控制</h2>
+            <div class="flex gap-4 mb-4">
+                <button id="startTest" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg">
+                    開始測試
+                </button>
+                <button id="stopTest" class="bg-red-600 hover:bg-red-700 text-white px-6 py-2 rounded-lg" disabled>
+                    停止測試
+                </button>
+                <button id="clearResults" class="bg-gray-600 hover:bg-gray-700 text-white px-6 py-2 rounded-lg">
+                    清除結果
+                </button>
+            </div>
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-sm font-medium mb-1">測試語言</label>
+                    <select id="langSelect" class="w-full px-3 py-2 border rounded-lg">
+                        <option value="zh-TW">繁體中文</option>
+                        <option value="en-US">English</option>
+                        <option value="ja-JP">日本語</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-1">測試次數</label>
+                    <input type="number" id="testCount" value="10" min="1" max="100" class="w-full px-3 py-2 border rounded-lg">
+                </div>
+            </div>
+        </div>
+        
+        <!-- 即時狀態 -->
+        <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+            <h2 class="text-xl font-semibold mb-4">即時狀態</h2>
+            <div class="grid grid-cols-3 gap-4">
+                <div class="text-center">
+                    <div class="text-3xl font-bold text-blue-600" id="currentLatency">--</div>
+                    <div class="text-sm text-gray-600">當前延遲 (ms)</div>
+                </div>
+                <div class="text-center">
+                    <div class="text-3xl font-bold text-green-600" id="avgLatency">--</div>
+                    <div class="text-sm text-gray-600">平均延遲 (ms)</div>
+                </div>
+                <div class="text-center">
+                    <div class="text-3xl font-bold text-purple-600" id="testProgress">0/0</div>
+                    <div class="text-sm text-gray-600">測試進度</div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 延遲圖表 -->
+        <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+            <h2 class="text-xl font-semibold mb-4">延遲趨勢圖</h2>
+            <canvas id="latencyChart"></canvas>
+        </div>
+        
+        <!-- 詳細結果 -->
+        <div class="bg-white rounded-lg shadow-md p-6">
+            <h2 class="text-xl font-semibold mb-4">測試結果</h2>
+            <div id="results" class="space-y-2">
+                <p class="text-gray-500">尚無測試結果</p>
+            </div>
+        </div>
+        
+        <!-- 統計摘要 -->
+        <div class="bg-white rounded-lg shadow-md p-6 mt-6">
+            <h2 class="text-xl font-semibold mb-4">統計摘要</h2>
+            <div id="statistics" class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div>
+                    <div class="text-sm text-gray-600">最小延遲</div>
+                    <div class="text-xl font-bold" id="minLatency">--</div>
+                </div>
+                <div>
+                    <div class="text-sm text-gray-600">最大延遲</div>
+                    <div class="text-xl font-bold" id="maxLatency">--</div>
+                </div>
+                <div>
+                    <div class="text-sm text-gray-600">中位數</div>
+                    <div class="text-xl font-bold" id="medianLatency">--</div>
+                </div>
+                <div>
+                    <div class="text-sm text-gray-600">標準差</div>
+                    <div class="text-xl font-bold" id="stdDevLatency">--</div>
+                </div>
+            </div>
+            <div class="mt-4 p-4 bg-gray-50 rounded">
+                <div class="text-sm">
+                    <p class="mb-2"><strong>測試結論：</strong></p>
+                    <p id="conclusion" class="text-gray-700">等待測試完成...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script type="module">
+        class WebSpeechLatencyTester {
+            constructor() {
+                this.recognition = null;
+                this.isRunning = false;
+                this.latencies = [];
+                this.currentTest = 0;
+                this.totalTests = 10;
+                this.startTime = 0;
+                this.chart = null;
+                
+                this.initializeUI();
+                this.initializeChart();
+            }
+            
+            initializeUI() {
+                document.getElementById('startTest').addEventListener('click', () => this.startTesting());
+                document.getElementById('stopTest').addEventListener('click', () => this.stopTesting());
+                document.getElementById('clearResults').addEventListener('click', () => this.clearResults());
+            }
+            
+            initializeChart() {
+                const ctx = document.getElementById('latencyChart').getContext('2d');
+                this.chart = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: [],
+                        datasets: [{
+                            label: '延遲 (ms)',
+                            data: [],
+                            borderColor: 'rgb(59, 130, 246)',
+                            backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                            tension: 0.1
+                        }, {
+                            label: '100ms 基準線',
+                            data: [],
+                            borderColor: 'rgba(239, 68, 68, 0.5)',
+                            borderDash: [5, 5],
+                            pointRadius: 0,
+                            fill: false
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                title: {
+                                    display: true,
+                                    text: '延遲 (ms)'
+                                }
+                            },
+                            x: {
+                                title: {
+                                    display: true,
+                                    text: '測試次數'
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+            
+            async startTesting() {
+                this.isRunning = true;
+                this.latencies = [];
+                this.currentTest = 0;
+                this.totalTests = parseInt(document.getElementById('testCount').value);
+                
+                document.getElementById('startTest').disabled = true;
+                document.getElementById('stopTest').disabled = false;
+                
+                // 初始化 Web Speech API
+                const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+                if (!SpeechRecognition) {
+                    alert('瀏覽器不支援 Web Speech API');
+                    return;
+                }
+                
+                this.addResult('開始測試 Web Speech API 延遲...');
+                
+                for (let i = 0; i < this.totalTests && this.isRunning; i++) {
+                    await this.runSingleTest(i + 1);
+                    await this.delay(500); // 測試間隔
+                }
+                
+                if (this.isRunning) {
+                    this.finishTesting();
+                }
+            }
+            
+            async runSingleTest(testNumber) {
+                return new Promise((resolve) => {
+                    const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+                    recognition.lang = document.getElementById('langSelect').value;
+                    recognition.continuous = false;
+                    recognition.interimResults = true;
+                    
+                    let firstResultTime = 0;
+                    let hasResult = false;
+                    
+                    recognition.onstart = () => {
+                        this.startTime = performance.now();
+                        this.addResult(`測試 ${testNumber}: 開始監聽...`);
+                    };
+                    
+                    recognition.onresult = (event) => {
+                        if (!hasResult) {
+                            hasResult = true;
+                            firstResultTime = performance.now();
+                            const latency = firstResultTime - this.startTime;
+                            this.latencies.push(latency);
+                            
+                            // 更新 UI
+                            document.getElementById('currentLatency').textContent = latency.toFixed(2);
+                            document.getElementById('testProgress').textContent = `${testNumber}/${this.totalTests}`;
+                            
+                            // 更新圖表
+                            this.updateChart(testNumber, latency);
+                            
+                            // 記錄結果
+                            const status = latency < 100 ? '✅ 通過' : '⚠️ 超標';
+                            this.addResult(`測試 ${testNumber}: ${latency.toFixed(2)}ms ${status}`);
+                            
+                            recognition.stop();
+                        }
+                    };
+                    
+                    recognition.onerror = (event) => {
+                        this.addResult(`測試 ${testNumber}: 錯誤 - ${event.error}`);
+                        resolve();
+                    };
+                    
+                    recognition.onend = () => {
+                        this.updateStatistics();
+                        resolve();
+                    };
+                    
+                    // 開始識別
+                    recognition.start();
+                    
+                    // 超時處理
+                    setTimeout(() => {
+                        if (!hasResult) {
+                            recognition.stop();
+                            this.addResult(`測試 ${testNumber}: 超時（>5秒）`);
+                            resolve();
+                        }
+                    }, 5000);
+                });
+            }
+            
+            updateChart(testNumber, latency) {
+                this.chart.data.labels.push(`測試 ${testNumber}`);
+                this.chart.data.datasets[0].data.push(latency);
+                this.chart.data.datasets[1].data.push(100); // 基準線
+                this.chart.update();
+            }
+            
+            updateStatistics() {
+                if (this.latencies.length === 0) return;
+                
+                const avg = this.latencies.reduce((a, b) => a + b, 0) / this.latencies.length;
+                const min = Math.min(...this.latencies);
+                const max = Math.max(...this.latencies);
+                const sorted = [...this.latencies].sort((a, b) => a - b);
+                const median = sorted[Math.floor(sorted.length / 2)];
+                
+                // 計算標準差
+                const variance = this.latencies.reduce((sum, val) => sum + Math.pow(val - avg, 2), 0) / this.latencies.length;
+                const stdDev = Math.sqrt(variance);
+                
+                document.getElementById('avgLatency').textContent = avg.toFixed(2);
+                document.getElementById('minLatency').textContent = min.toFixed(2) + ' ms';
+                document.getElementById('maxLatency').textContent = max.toFixed(2) + ' ms';
+                document.getElementById('medianLatency').textContent = median.toFixed(2) + ' ms';
+                document.getElementById('stdDevLatency').textContent = stdDev.toFixed(2) + ' ms';
+            }
+            
+            finishTesting() {
+                this.isRunning = false;
+                document.getElementById('startTest').disabled = false;
+                document.getElementById('stopTest').disabled = true;
+                
+                // 生成結論
+                const avg = this.latencies.reduce((a, b) => a + b, 0) / this.latencies.length;
+                const below100 = this.latencies.filter(l => l < 100).length;
+                const percentage = (below100 / this.latencies.length * 100).toFixed(1);
+                
+                let conclusion = `完成 ${this.latencies.length} 次測試。\n`;
+                conclusion += `平均延遲：${avg.toFixed(2)}ms\n`;
+                conclusion += `${percentage}% 的測試延遲低於 100ms\n`;
+                
+                if (avg < 100) {
+                    conclusion += '✅ 測試通過：平均延遲符合 < 100ms 的要求';
+                } else {
+                    conclusion += '⚠️ 測試未通過：平均延遲超過 100ms';
+                }
+                
+                document.getElementById('conclusion').textContent = conclusion;
+                this.addResult('測試完成！');
+            }
+            
+            stopTesting() {
+                this.isRunning = false;
+                this.finishTesting();
+                this.addResult('測試已手動停止');
+            }
+            
+            clearResults() {
+                document.getElementById('results').innerHTML = '<p class="text-gray-500">尚無測試結果</p>';
+                document.getElementById('currentLatency').textContent = '--';
+                document.getElementById('avgLatency').textContent = '--';
+                document.getElementById('testProgress').textContent = '0/0';
+                document.getElementById('minLatency').textContent = '--';
+                document.getElementById('maxLatency').textContent = '--';
+                document.getElementById('medianLatency').textContent = '--';
+                document.getElementById('stdDevLatency').textContent = '--';
+                document.getElementById('conclusion').textContent = '等待測試完成...';
+                
+                // 清除圖表
+                this.chart.data.labels = [];
+                this.chart.data.datasets[0].data = [];
+                this.chart.data.datasets[1].data = [];
+                this.chart.update();
+                
+                this.latencies = [];
+            }
+            
+            addResult(message) {
+                const resultsDiv = document.getElementById('results');
+                if (resultsDiv.querySelector('.text-gray-500')) {
+                    resultsDiv.innerHTML = '';
+                }
+                const time = new Date().toLocaleTimeString();
+                resultsDiv.innerHTML += `<div class="p-2 bg-gray-50 rounded"><span class="text-gray-500 text-sm">[${time}]</span> ${message}</div>`;
+                resultsDiv.scrollTop = resultsDiv.scrollHeight;
+            }
+            
+            delay(ms) {
+                return new Promise(resolve => setTimeout(resolve, ms));
+            }
+        }
+        
+        // 初始化測試器
+        const tester = new WebSpeechLatencyTester();
+    </script>
+</body>
+</html>

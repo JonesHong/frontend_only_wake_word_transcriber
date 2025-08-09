@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>模式切換測試</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 p-8">
+    <div class="max-w-4xl mx-auto">
+        <h1 class="text-3xl font-bold mb-8 text-center">模式自動切換測試</h1>
+        
+        <!-- 測試場景 -->
+        <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+            <h2 class="text-xl font-semibold mb-4">測試場景</h2>
+            <div class="space-y-4">
+                <div class="p-4 border rounded-lg">
+                    <h3 class="font-semibold mb-2">場景 1：網路連線測試</h3>
+                    <p class="text-sm text-gray-600 mb-3">測試有網路時使用 Web Speech API，無網路時自動切換到 Whisper</p>
+                    <button id="testNetwork" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded">
+                        開始測試
+                    </button>
+                    <div id="networkResult" class="mt-2 text-sm"></div>
+                </div>
+                
+                <div class="p-4 border rounded-lg">
+                    <h3 class="font-semibold mb-2">場景 2：檔案處理測試</h3>
+                    <p class="text-sm text-gray-600 mb-3">測試檔案上傳時自動選擇 Whisper 處理</p>
+                    <button id="testFile" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded">
+                        開始測試
+                    </button>
+                    <div id="fileResult" class="mt-2 text-sm"></div>
+                </div>
+                
+                <div class="p-4 border rounded-lg">
+                    <h3 class="font-semibold mb-2">場景 3：即時轉譯測試</h3>
+                    <p class="text-sm text-gray-600 mb-3">測試即時語音輸入時使用 Web Speech API</p>
+                    <button id="testRealtime" class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded">
+                        開始測試
+                    </button>
+                    <div id="realtimeResult" class="mt-2 text-sm"></div>
+                </div>
+                
+                <div class="p-4 border rounded-lg">
+                    <h3 class="font-semibold mb-2">場景 4：API 不可用測試</h3>
+                    <p class="text-sm text-gray-600 mb-3">模擬 Web Speech API 不可用時的降級</p>
+                    <button id="testFallback" class="bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded">
+                        開始測試
+                    </button>
+                    <div id="fallbackResult" class="mt-2 text-sm"></div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 狀態監控 -->
+        <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+            <h2 class="text-xl font-semibold mb-4">當前狀態</h2>
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label class="text-sm text-gray-600">當前模式</label>
+                    <div id="currentMode" class="text-lg font-semibold">未初始化</div>
+                </div>
+                <div>
+                    <label class="text-sm text-gray-600">網路狀態</label>
+                    <div id="networkStatus" class="text-lg font-semibold">檢測中...</div>
+                </div>
+                <div>
+                    <label class="text-sm text-gray-600">Web Speech API</label>
+                    <div id="webSpeechStatus" class="text-lg font-semibold">檢測中...</div>
+                </div>
+                <div>
+                    <label class="text-sm text-gray-600">Whisper 狀態</label>
+                    <div id="whisperStatus" class="text-lg font-semibold">未載入</div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 測試日誌 -->
+        <div class="bg-white rounded-lg shadow-md p-6">
+            <h2 class="text-xl font-semibold mb-4">測試日誌</h2>
+            <div id="testLog" class="space-y-2 max-h-96 overflow-y-auto">
+                <p class="text-gray-500">等待測試開始...</p>
+            </div>
+        </div>
+    </div>
+    
+    <script type="module">
+        // 載入必要的模組
+        import('/js/modules/speech-recognition-manager.js').then(module => {
+            const { getSpeechRecognitionManager } = module;
+            
+            class ModeSwitchingTester {
+                constructor() {
+                    this.manager = null;
+                    this.initializeTests();
+                    this.checkStatus();
+                }
+                
+                initializeTests() {
+                    document.getElementById('testNetwork').addEventListener('click', () => this.testNetworkScenario());
+                    document.getElementById('testFile').addEventListener('click', () => this.testFileScenario());
+                    document.getElementById('testRealtime').addEventListener('click', () => this.testRealtimeScenario());
+                    document.getElementById('testFallback').addEventListener('click', () => this.testFallbackScenario());
+                }
+                
+                checkStatus() {
+                    // 檢查網路狀態
+                    const networkStatus = navigator.onLine ? '✅ 已連線' : '❌ 離線';
+                    document.getElementById('networkStatus').textContent = networkStatus;
+                    
+                    // 檢查 Web Speech API
+                    const hasWebSpeech = 'SpeechRecognition' in window || 'webkitSpeechRecognition' in window;
+                    document.getElementById('webSpeechStatus').textContent = hasWebSpeech ? '✅ 可用' : '❌ 不可用';
+                    
+                    // 監聽網路變化
+                    window.addEventListener('online', () => {
+                        document.getElementById('networkStatus').textContent = '✅ 已連線';
+                        this.log('網路已連線');
+                    });
+                    
+                    window.addEventListener('offline', () => {
+                        document.getElementById('networkStatus').textContent = '❌ 離線';
+                        this.log('網路已斷開');
+                    });
+                }
+                
+                async testNetworkScenario() {
+                    this.log('開始測試網路場景...');
+                    const resultDiv = document.getElementById('networkResult');
+                    
+                    try {
+                        // 測試線上模式
+                        this.manager = getSpeechRecognitionManager({
+                            language: 'zh-TW',
+                            continuous: true
+                        });
+                        
+                        if (navigator.onLine) {
+                            await this.manager.start();
+                            const mode = this.manager.getCurrentMode();
+                            this.log(`線上模式：使用 ${mode}`);
+                            document.getElementById('currentMode').textContent = mode;
+                            resultDiv.innerHTML = `<span class="text-green-600">✅ 線上時使用 ${mode}</span>`;
+                            
+                            // 停止測試
+                            await this.manager.stop();
+                        } else {
+                            this.log('當前離線，將使用降級模式');
+                            resultDiv.innerHTML = '<span class="text-orange-600">⚠️ 離線模式，需要 Whisper 支援</span>';
+                        }
+                    } catch (error) {
+                        this.log(`錯誤：${error.message}`, 'error');
+                        resultDiv.innerHTML = `<span class="text-red-600">❌ 測試失敗：${error.message}</span>`;
+                    }
+                }
+                
+                async testFileScenario() {
+                    this.log('開始測試檔案處理場景...');
+                    const resultDiv = document.getElementById('fileResult');
+                    
+                    try {
+                        // 創建模擬音訊檔案
+                        const audioContext = new AudioContext();
+                        const buffer = audioContext.createBuffer(1, 16000, 16000);
+                        const channelData = buffer.getChannelData(0);
+                        
+                        // 填充隨機音訊數據
+                        for (let i = 0; i < channelData.length; i++) {
+                            channelData[i] = Math.random() * 0.1 - 0.05;
+                        }
+                        
+                        // 轉換為 Blob
+                        const blob = await this.audioBufferToWav(buffer);
+                        const file = new File([blob], 'test.wav', { type: 'audio/wav' });
+                        
+                        this.manager = getSpeechRecognitionManager({
+                            language: 'zh-TW'
+                        });
+                        
+                        // 測試檔案模式應該選擇 Whisper
+                        const mode = this.manager.determineMode('file', { hasNetwork: true });
+                        this.log(`檔案模式：建議使用 ${mode}`);
+                        document.getElementById('currentMode').textContent = mode;
+                        
+                        if (mode === 'whisper') {
+                            resultDiv.innerHTML = '<span class="text-green-600">✅ 檔案處理正確選擇 Whisper</span>';
+                        } else {
+                            resultDiv.innerHTML = '<span class="text-orange-600">⚠️ 檔案處理使用 Web Speech API（可能不支援）</span>';
+                        }
+                    } catch (error) {
+                        this.log(`錯誤：${error.message}`, 'error');
+                        resultDiv.innerHTML = `<span class="text-red-600">❌ 測試失敗：${error.message}</span>`;
+                    }
+                }
+                
+                async testRealtimeScenario() {
+                    this.log('開始測試即時轉譯場景...');
+                    const resultDiv = document.getElementById('realtimeResult');
+                    
+                    try {
+                        this.manager = getSpeechRecognitionManager({
+                            language: 'zh-TW',
+                            continuous: true,
+                            interimResults: true
+                        });
+                        
+                        // 測試即時模式
+                        const mode = this.manager.determineMode('streaming', { 
+                            hasNetwork: navigator.onLine,
+                            hasWebSpeech: 'SpeechRecognition' in window || 'webkitSpeechRecognition' in window
+                        });
+                        
+                        this.log(`即時模式：使用 ${mode}`);
+                        document.getElementById('currentMode').textContent = mode;
+                        
+                        if (mode === 'webspeech') {
+                            // 嘗試啟動
+                            await this.manager.start();
+                            resultDiv.innerHTML = '<span class="text-green-600">✅ 即時轉譯使用 Web Speech API</span>';
+                            
+                            // 測試 3 秒後停止
+                            setTimeout(async () => {
+                                await this.manager.stop();
+                                this.log('即時轉譯測試完成');
+                            }, 3000);
+                        } else {
+                            resultDiv.innerHTML = '<span class="text-orange-600">⚠️ 降級使用 Whisper（可能有延遲）</span>';
+                        }
+                    } catch (error) {
+                        this.log(`錯誤：${error.message}`, 'error');
+                        resultDiv.innerHTML = `<span class="text-red-600">❌ 測試失敗：${error.message}</span>`;
+                    }
+                }
+                
+                async testFallbackScenario() {
+                    this.log('開始測試降級場景...');
+                    const resultDiv = document.getElementById('fallbackResult');
+                    
+                    try {
+                        // 模擬 Web Speech API 不可用
+                        const originalSpeechRecognition = window.SpeechRecognition;
+                        const originalWebkitSpeechRecognition = window.webkitSpeechRecognition;
+                        
+                        // 暫時移除 API
+                        delete window.SpeechRecognition;
+                        delete window.webkitSpeechRecognition;
+                        
+                        this.manager = getSpeechRecognitionManager({
+                            language: 'zh-TW'
+                        });
+                        
+                        const mode = this.manager.determineMode('streaming', { 
+                            hasNetwork: true,
+                            hasWebSpeech: false 
+                        });
+                        
+                        this.log(`API 不可用時：降級到 ${mode}`);
+                        document.getElementById('currentMode').textContent = mode;
+                        
+                        if (mode === 'whisper' || mode === 'none') {
+                            resultDiv.innerHTML = '<span class="text-green-600">✅ 正確降級到備用方案</span>';
+                        } else {
+                            resultDiv.innerHTML = '<span class="text-red-600">❌ 降級失敗</span>';
+                        }
+                        
+                        // 恢復 API
+                        if (originalSpeechRecognition) window.SpeechRecognition = originalSpeechRecognition;
+                        if (originalWebkitSpeechRecognition) window.webkitSpeechRecognition = originalWebkitSpeechRecognition;
+                        
+                    } catch (error) {
+                        this.log(`錯誤：${error.message}`, 'error');
+                        resultDiv.innerHTML = `<span class="text-red-600">❌ 測試失敗：${error.message}</span>`;
+                    }
+                }
+                
+                audioBufferToWav(buffer) {
+                    const length = buffer.length * buffer.numberOfChannels * 2 + 44;
+                    const arrayBuffer = new ArrayBuffer(length);
+                    const view = new DataView(arrayBuffer);
+                    const channels = [];
+                    let offset = 0;
+                    let pos = 0;
+                    
+                    // 寫入 WAV 頭
+                    const setUint16 = (data) => {
+                        view.setUint16(pos, data, true);
+                        pos += 2;
+                    };
+                    const setUint32 = (data) => {
+                        view.setUint32(pos, data, true);
+                        pos += 4;
+                    };
+                    
+                    // RIFF identifier
+                    setUint32(0x46464952);
+                    // file length
+                    setUint32(length - 8);
+                    // WAVE identifier
+                    setUint32(0x45564157);
+                    // fmt chunk identifier
+                    setUint32(0x20746d66);
+                    // chunk length
+                    setUint32(16);
+                    // sample format (PCM)
+                    setUint16(1);
+                    // channel count
+                    setUint16(buffer.numberOfChannels);
+                    // sample rate
+                    setUint32(buffer.sampleRate);
+                    // byte rate
+                    setUint32(buffer.sampleRate * buffer.numberOfChannels * 2);
+                    // block align
+                    setUint16(buffer.numberOfChannels * 2);
+                    // bits per sample
+                    setUint16(16);
+                    // data chunk identifier
+                    setUint32(0x61746164);
+                    // data length
+                    setUint32(length - pos - 4);
+                    
+                    // 寫入音訊數據
+                    for (let i = 0; i < buffer.numberOfChannels; i++) {
+                        channels.push(buffer.getChannelData(i));
+                    }
+                    
+                    while (pos < length) {
+                        for (let i = 0; i < buffer.numberOfChannels; i++) {
+                            const sample = Math.max(-1, Math.min(1, channels[i][offset]));
+                            view.setInt16(pos, sample * 0x7FFF, true);
+                            pos += 2;
+                        }
+                        offset++;
+                    }
+                    
+                    return new Blob([arrayBuffer], { type: 'audio/wav' });
+                }
+                
+                log(message, type = 'info') {
+                    const logDiv = document.getElementById('testLog');
+                    const time = new Date().toLocaleTimeString();
+                    const colorClass = type === 'error' ? 'text-red-600' : 
+                                       type === 'warning' ? 'text-orange-600' : 
+                                       'text-gray-700';
+                    
+                    if (logDiv.querySelector('.text-gray-500')) {
+                        logDiv.innerHTML = '';
+                    }
+                    
+                    logDiv.innerHTML += `
+                        <div class="p-2 bg-gray-50 rounded">
+                            <span class="text-gray-500 text-sm">[${time}]</span>
+                            <span class="${colorClass}">${message}</span>
+                        </div>
+                    `;
+                    
+                    logDiv.scrollTop = logDiv.scrollHeight;
+                }
+            }
+            
+            // 初始化測試器
+            const tester = new ModeSwitchingTester();
+        }).catch(error => {
+            console.error('Failed to load module:', error);
+            document.getElementById('testLog').innerHTML = `
+                <div class="text-red-600">
+                    無法載入 SpeechRecognitionManager 模組：${error.message}
+                </div>
+            `;
+        });
+    </script>
+</body>
+</html>

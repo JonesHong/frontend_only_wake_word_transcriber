@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Worker 架構測試</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .status-indicator {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 5px;
+        }
+        .status-active { background-color: #10b981; }
+        .status-inactive { background-color: #ef4444; }
+        .status-warning { background-color: #f59e0b; }
+        
+        .performance-bar {
+            height: 20px;
+            background: linear-gradient(90deg, #10b981 var(--percentage), #e5e7eb var(--percentage));
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body class="bg-gray-100">
+    <div class="container mx-auto p-8">
+        <h1 class="text-3xl font-bold mb-6">Worker 架構測試與效能評估</h1>
+        
+        <!-- 控制面板 -->
+        <div class="bg-white rounded-lg shadow p-6 mb-6">
+            <h2 class="text-xl font-semibold mb-4">控制面板</h2>
+            <div class="grid grid-cols-4 gap-4">
+                <button id="initBtn" class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">
+                    初始化系統
+                </button>
+                <button id="testWakewordBtn" class="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600" disabled>
+                    測試喚醒詞
+                </button>
+                <button id="testVadBtn" class="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600" disabled>
+                    測試 VAD
+                </button>
+                <button id="benchmarkBtn" class="bg-purple-500 text-white px-4 py-2 rounded hover:bg-purple-600" disabled>
+                    執行基準測試
+                </button>
+                <button id="fallbackBtn" class="bg-orange-500 text-white px-4 py-2 rounded hover:bg-orange-600" disabled>
+                    測試降級機制
+                </button>
+                <button id="cleanupBtn" class="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600" disabled>
+                    清理資源
+                </button>
+            </div>
+        </div>
+        
+        <!-- 系統狀態 -->
+        <div class="bg-white rounded-lg shadow p-6 mb-6">
+            <h2 class="text-xl font-semibold mb-4">系統狀態</h2>
+            <div class="grid grid-cols-2 gap-6">
+                <div>
+                    <h3 class="font-semibold mb-2">執行模式</h3>
+                    <div id="executionMode" class="space-y-2">
+                        <p>等待初始化...</p>
+                    </div>
+                </div>
+                <div>
+                    <h3 class="font-semibold mb-2">能力檢測</h3>
+                    <div id="capabilities" class="space-y-1 text-sm">
+                        <p>等待檢測...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Worker 狀態 -->
+        <div class="bg-white rounded-lg shadow p-6 mb-6">
+            <h2 class="text-xl font-semibold mb-4">Worker 狀態</h2>
+            <div id="workerStatus" class="space-y-2">
+                <p>尚未創建 Worker</p>
+            </div>
+        </div>
+        
+        <!-- 效能指標 -->
+        <div class="bg-white rounded-lg shadow p-6 mb-6">
+            <h2 class="text-xl font-semibold mb-4">效能指標</h2>
+            <div class="grid grid-cols-2 gap-6">
+                <div>
+                    <h3 class="font-semibold mb-2">喚醒詞偵測</h3>
+                    <div id="wakewordPerf" class="space-y-2">
+                        <p>尚未測試</p>
+                    </div>
+                </div>
+                <div>
+                    <h3 class="font-semibold mb-2">VAD</h3>
+                    <div id="vadPerf" class="space-y-2">
+                        <p>尚未測試</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 測試結果 -->
+        <div class="bg-white rounded-lg shadow p-6 mb-6">
+            <h2 class="text-xl font-semibold mb-4">測試結果</h2>
+            <div id="testResults" class="space-y-2 font-mono text-sm">
+                <p>等待測試...</p>
+            </div>
+        </div>
+        
+        <!-- 降級測試 -->
+        <div class="bg-white rounded-lg shadow p-6">
+            <h2 class="text-xl font-semibold mb-4">降級機制測試</h2>
+            <div id="fallbackTest" class="space-y-2">
+                <p>點擊"測試降級機制"按鈕開始測試</p>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { WorkerManager } from './js/modules/worker-manager.js';
+        import { ExecutionModeManager } from './js/modules/execution-mode-manager.js';
+        import { WorkerIntegratedWakeword } from './js/modules/worker-integrated-wakeword.js';
+        import { WorkerIntegratedVAD } from './js/modules/worker-integrated-vad.js';
+        
+        // 全域變數
+        let workerManager = null;
+        let executionManager = null;
+        let wakewordDetector = null;
+        let vadDetector = null;
+        let isInitialized = false;
+        
+        // DOM 元素
+        const initBtn = document.getElementById('initBtn');
+        const testWakewordBtn = document.getElementById('testWakewordBtn');
+        const testVadBtn = document.getElementById('testVadBtn');
+        const benchmarkBtn = document.getElementById('benchmarkBtn');
+        const fallbackBtn = document.getElementById('fallbackBtn');
+        const cleanupBtn = document.getElementById('cleanupBtn');
+        
+        const executionModeDiv = document.getElementById('executionMode');
+        const capabilitiesDiv = document.getElementById('capabilities');
+        const workerStatusDiv = document.getElementById('workerStatus');
+        const wakewordPerfDiv = document.getElementById('wakewordPerf');
+        const vadPerfDiv = document.getElementById('vadPerf');
+        const testResultsDiv = document.getElementById('testResults');
+        const fallbackTestDiv = document.getElementById('fallbackTest');
+        
+        // 初始化按鈕
+        initBtn.addEventListener('click', async () => {
+            initBtn.disabled = true;
+            initBtn.textContent = '初始化中...';
+            
+            try {
+                await initializeSystem();
+                
+                // 啟用其他按鈕
+                testWakewordBtn.disabled = false;
+                testVadBtn.disabled = false;
+                benchmarkBtn.disabled = false;
+                fallbackBtn.disabled = false;
+                cleanupBtn.disabled = false;
+                
+                initBtn.textContent = '重新初始化';
+                initBtn.disabled = false;
+                
+            } catch (error) {
+                console.error('初始化失敗:', error);
+                addTestResult(`初始化失敗: ${error.message}`, 'error');
+                initBtn.disabled = false;
+                initBtn.textContent = '初始化系統';
+            }
+        });
+        
+        // 測試喚醒詞按鈕
+        testWakewordBtn.addEventListener('click', async () => {
+            await testWakewordDetection();
+        });
+        
+        // 測試 VAD 按鈕
+        testVadBtn.addEventListener('click', async () => {
+            await testVADDetection();
+        });
+        
+        // 基準測試按鈕
+        benchmarkBtn.addEventListener('click', async () => {
+            await runBenchmark();
+        });
+        
+        // 降級測試按鈕
+        fallbackBtn.addEventListener('click', async () => {
+            await testFallbackMechanism();
+        });
+        
+        // 清理資源按鈕
+        cleanupBtn.addEventListener('click', async () => {
+            await cleanupResources();
+        });
+        
+        // 初始化系統
+        async function initializeSystem() {
+            addTestResult('開始初始化系統...', 'info');
+            
+            // 初始化管理器（使用全域實例）
+            workerManager = new WorkerManager();
+            await workerManager.initialize();
+            
+            executionManager = new ExecutionModeManager();
+            const execInfo = await executionManager.initialize();
+            
+            // 顯示執行模式
+            displayExecutionMode(execInfo);
+            
+            // 顯示能力檢測
+            displayCapabilities(execInfo.capabilities);
+            
+            // 初始化喚醒詞偵測器（注入共享的 workerManager）
+            wakewordDetector = new WorkerIntegratedWakeword();
+            // 直接使用共享的 workerManager，而不是讓它創建新的
+            wakewordDetector.workerManager = workerManager;
+            wakewordDetector.executionManager = executionManager;
+            await wakewordDetector.initialize();
+            
+            // 初始化 VAD（注入共享的 workerManager）
+            vadDetector = new WorkerIntegratedVAD();
+            // 直接使用共享的 workerManager
+            vadDetector.workerManager = workerManager;
+            vadDetector.executionManager = executionManager;
+            await vadDetector.initialize();
+            
+            // 更新 Worker 狀態
+            updateWorkerStatus();
+            
+            // 定期更新 Worker 狀態
+            setInterval(() => {
+                if (isInitialized) {
+                    updateWorkerStatus();
+                }
+            }, 2000);
+            
+            isInitialized = true;
+            addTestResult('系統初始化完成', 'success');
+        }
+        
+        // 顯示執行模式
+        function displayExecutionMode(info) {
+            executionModeDiv.innerHTML = `
+                <p><strong>當前模式:</strong> ${info.currentMode.mode}</p>
+                <p><strong>描述:</strong> ${info.currentMode.description}</p>
+                <p><strong>分數:</strong> ${info.currentMode.score}/100</p>
+                <p><strong>可用模式:</strong> ${info.availableModes.length} 個</p>
+            `;
+        }
+        
+        // 顯示能力檢測
+        function displayCapabilities(caps) {
+            const items = [
+                `Web Worker: ${caps.webWorker ? '✅' : '❌'}`,
+                `WebGPU: ${caps.webGPU ? '✅' : '❌'}`,
+                `WebAssembly: ${caps.webAssembly ? '✅' : '❌'}`,
+                `SIMD: ${caps.simd ? '✅' : '❌'}`,
+                `Threads: ${caps.threads ? '✅' : '❌'}`,
+                `SharedArrayBuffer: ${caps.sharedArrayBuffer ? '✅' : '❌'}`,
+                `CPU 核心: ${caps.hardwareConcurrency}`,
+                `記憶體: ${caps.deviceMemory || 'N/A'} GB`,
+                `效能分數: ${caps.performanceScore}/300`
+            ];
+            
+            capabilitiesDiv.innerHTML = items.map(item => `<p>${item}</p>`).join('');
+        }
+        
+        // 更新 Worker 狀態
+        function updateWorkerStatus() {
+            if (!workerManager) {
+                workerStatusDiv.innerHTML = '<p>Worker Manager 未初始化</p>';
+                return;
+            }
+            
+            // 調試：檢查 workers Map 的內容
+            console.log('Workers Map size:', workerManager.workers?.size);
+            console.log('Workers Map:', workerManager.workers);
+            
+            const status = workerManager.getAllWorkersStatus();
+            console.log('Worker Status:', status);
+            
+            if (!status || Object.keys(status).length === 0) {
+                // 嘗試直接從 workers Map 獲取資訊
+                if (workerManager.workers && workerManager.workers.size > 0) {
+                    let html = '<div class="space-y-2">';
+                    workerManager.workers.forEach((info, name) => {
+                        const indicator = info ? 'status-active' : 'status-inactive';
+                        html += `
+                            <div class="flex items-center justify-between p-2 bg-gray-50 rounded">
+                                <span>
+                                    <span class="status-indicator ${indicator}"></span>
+                                    ${name}
+                                </span>
+                                <span class="text-sm text-gray-600">
+                                    ${info.type} (${info.worker ? 'Worker' : '主執行緒'})
+                                </span>
+                            </div>
+                        `;
+                    });
+                    html += '</div>';
+                    workerStatusDiv.innerHTML = html;
+                } else {
+                    workerStatusDiv.innerHTML = '<p>沒有活動的 Worker</p>';
+                }
+                return;
+            }
+            
+            const html = Object.entries(status).map(([name, info]) => {
+                const indicator = info ? 'status-active' : 'status-inactive';
+                return `
+                    <div class="flex items-center justify-between p-2 bg-gray-50 rounded">
+                        <span>
+                            <span class="status-indicator ${indicator}"></span>
+                            ${name}
+                        </span>
+                        <span class="text-sm text-gray-600">
+                            ${info ? `${info.type} (${info.isMainThread ? '主執行緒' : 'Worker'})` : '未啟動'}
+                        </span>
+                    </div>
+                `;
+            }).join('');
+            
+            workerStatusDiv.innerHTML = html;
+        }
+        
+        // 測試喚醒詞偵測
+        async function testWakewordDetection() {
+            addTestResult('開始測試喚醒詞偵測...', 'info');
+            
+            // 創建測試音訊
+            const testAudio = new Float32Array(1280);
+            for (let i = 0; i < testAudio.length; i++) {
+                testAudio[i] = Math.sin(2 * Math.PI * 440 * i / 16000) * 0.1;
+            }
+            
+            // 執行多次測試 (需要至少 16 次來累積 76+ 幀)
+            const times = [];
+            const iterations = 20; // 增加到 20 次確保有足夠的幀
+            addTestResult(`執行 ${iterations} 次推論以累積足夠的幀...`, 'info');
+            
+            for (let i = 0; i < iterations; i++) {
+                const startTime = performance.now();
+                const score = await wakewordDetector.processAudioChunk(testAudio);
+                const endTime = performance.now();
+                times.push(endTime - startTime);
+                
+                // 顯示進度和分數
+                if (score > 0.01) {
+                    addTestResult(`迭代 ${i + 1}: 偵測分數 = ${score.toFixed(4)}`, 'info');
+                }
+            }
+            
+            // 顯示效能統計
+            const stats = wakewordDetector.getPerformanceStats();
+            displayWakewordPerformance(stats, times);
+            
+            addTestResult(`喚醒詞測試完成，平均時間: ${stats.averageTime.toFixed(2)}ms`, 'success');
+        }
+        
+        // 測試 VAD 偵測
+        async function testVADDetection() {
+            addTestResult('開始測試 VAD...', 'info');
+            
+            // 創建測試音訊（靜音）
+            const silentAudio = new Float32Array(512).fill(0);
+            
+            // 創建測試音訊（模擬語音 - 使用噪音加多頻率）
+            const voiceAudio = new Float32Array(512);
+            for (let i = 0; i < voiceAudio.length; i++) {
+                // 組合多個頻率來模擬更真實的語音
+                voiceAudio[i] = (
+                    Math.sin(2 * Math.PI * 200 * i / 16000) * 0.2 +  // 基頻
+                    Math.sin(2 * Math.PI * 400 * i / 16000) * 0.15 + // 諧波
+                    Math.sin(2 * Math.PI * 800 * i / 16000) * 0.1 +  // 諧波
+                    (Math.random() - 0.5) * 0.05  // 添加少量噪音
+                );
+            }
+            
+            // 測試靜音
+            const silentResult = await vadDetector.processAudioChunk(silentAudio);
+            addTestResult(`靜音測試: ${silentResult.isSpeech ? '❌ 錯誤偵測' : '✅ 正確'}`, 
+                         silentResult.isSpeech ? 'error' : 'success');
+            
+            // 測試有聲音
+            const voiceResult = await vadDetector.processAudioChunk(voiceAudio);
+            addTestResult(`語音測試: ${voiceResult.isSpeech ? '✅ 正確' : '❌ 未偵測'}`,
+                         voiceResult.isSpeech ? 'success' : 'warning');
+            
+            // 顯示效能統計
+            const stats = vadDetector.getPerformanceStats();
+            displayVADPerformance(stats);
+            
+            addTestResult(`VAD 測試完成`, 'success');
+        }
+        
+        // 執行基準測試
+        async function runBenchmark() {
+            addTestResult('開始執行基準測試...', 'info');
+            
+            const results = {
+                wakeword: [],
+                vad: []
+            };
+            
+            // 測試不同大小的批次
+            const batchSizes = [1, 10, 50, 100];
+            
+            for (const batchSize of batchSizes) {
+                addTestResult(`測試批次大小: ${batchSize}`, 'info');
+                
+                // 喚醒詞基準測試
+                const wakewordTimes = [];
+                const testAudio = new Float32Array(1280).fill(0);
+                
+                for (let i = 0; i < batchSize; i++) {
+                    const startTime = performance.now();
+                    await wakewordDetector.processAudioChunk(testAudio);
+                    const endTime = performance.now();
+                    wakewordTimes.push(endTime - startTime);
+                }
+                
+                const wakewordAvg = wakewordTimes.reduce((a, b) => a + b, 0) / wakewordTimes.length;
+                results.wakeword.push({ batchSize, avgTime: wakewordAvg });
+                
+                // VAD 基準測試
+                const vadTimes = [];
+                const vadAudio = new Float32Array(512).fill(0);
+                
+                for (let i = 0; i < batchSize; i++) {
+                    const startTime = performance.now();
+                    await vadDetector.processAudioChunk(vadAudio);
+                    const endTime = performance.now();
+                    vadTimes.push(endTime - startTime);
+                }
+                
+                const vadAvg = vadTimes.reduce((a, b) => a + b, 0) / vadTimes.length;
+                results.vad.push({ batchSize, avgTime: vadAvg });
+            }
+            
+            // 顯示結果
+            displayBenchmarkResults(results);
+            addTestResult('基準測試完成', 'success');
+        }
+        
+        // 測試降級機制
+        async function testFallbackMechanism() {
+            addTestResult('開始測試降級機制...', 'info');
+            
+            const originalMode = executionManager.currentMode;
+            addTestResult(`原始模式: ${originalMode.mode}`, 'info');
+            
+            // 模擬降級
+            const fallbackMode = executionManager.fallbackToNextMode();
+            if (fallbackMode) {
+                addTestResult(`降級到: ${fallbackMode.mode}`, 'warning');
+                
+                // 重新初始化以應用新模式
+                await cleanupResources();
+                await initializeSystem();
+                
+                // 執行簡單測試確認功能正常
+                const testAudio = new Float32Array(1280).fill(0);
+                const score = await wakewordDetector.processAudioChunk(testAudio);
+                
+                addTestResult(`降級模式測試成功，分數: ${score.toFixed(3)}`, 'success');
+            } else {
+                addTestResult('已經是最低模式，無法降級', 'warning');
+            }
+            
+            // 顯示降級資訊
+            displayFallbackInfo();
+        }
+        
+        // 清理資源
+        async function cleanupResources() {
+            addTestResult('開始清理資源...', 'info');
+            
+            if (wakewordDetector) {
+                await wakewordDetector.cleanup();
+                wakewordDetector = null;
+            }
+            
+            if (vadDetector) {
+                await vadDetector.cleanup();
+                vadDetector = null;
+            }
+            
+            if (workerManager) {
+                workerManager.terminateAll();
+                workerManager = null;
+            }
+            
+            // 更新狀態顯示
+            workerStatusDiv.innerHTML = '<p>所有 Worker 已終止</p>';
+            wakewordPerfDiv.innerHTML = '<p>已清理</p>';
+            vadPerfDiv.innerHTML = '<p>已清理</p>';
+            
+            // 禁用按鈕
+            testWakewordBtn.disabled = true;
+            testVadBtn.disabled = true;
+            benchmarkBtn.disabled = true;
+            fallbackBtn.disabled = true;
+            cleanupBtn.disabled = true;
+            
+            isInitialized = false;
+            addTestResult('資源清理完成', 'success');
+        }
+        
+        // 顯示喚醒詞效能
+        function displayWakewordPerformance(stats, times) {
+            const html = `
+                <p><strong>推論次數:</strong> ${stats.inferenceCount}</p>
+                <p><strong>平均時間:</strong> ${stats.averageTime.toFixed(2)}ms</p>
+                <p><strong>最後時間:</strong> ${stats.lastTime.toFixed(2)}ms</p>
+                <p><strong>執行模式:</strong> ${stats.executionMode}</p>
+                <div class="performance-bar mt-2" style="--percentage: ${Math.min(100, (10 / stats.averageTime) * 100)}%"></div>
+            `;
+            wakewordPerfDiv.innerHTML = html;
+        }
+        
+        // 顯示 VAD 效能
+        function displayVADPerformance(stats) {
+            const html = `
+                <p><strong>推論次數:</strong> ${stats.inferenceCount}</p>
+                <p><strong>平均時間:</strong> ${stats.averageTime.toFixed(2)}ms</p>
+                <p><strong>最後時間:</strong> ${stats.lastTime.toFixed(2)}ms</p>
+                <p><strong>執行模式:</strong> ${stats.executionMode}</p>
+                <div class="performance-bar mt-2" style="--percentage: ${Math.min(100, (5 / stats.averageTime) * 100)}%"></div>
+            `;
+            vadPerfDiv.innerHTML = html;
+        }
+        
+        // 顯示基準測試結果
+        function displayBenchmarkResults(results) {
+            let html = '<h3 class="font-semibold mb-2">基準測試結果</h3>';
+            
+            html += '<div class="mb-3"><strong>喚醒詞偵測:</strong>';
+            results.wakeword.forEach(r => {
+                html += `<p class="ml-4">批次 ${r.batchSize}: ${r.avgTime.toFixed(2)}ms</p>`;
+            });
+            html += '</div>';
+            
+            html += '<div><strong>VAD:</strong>';
+            results.vad.forEach(r => {
+                html += `<p class="ml-4">批次 ${r.batchSize}: ${r.avgTime.toFixed(2)}ms</p>`;
+            });
+            html += '</div>';
+            
+            fallbackTestDiv.innerHTML = html;
+        }
+        
+        // 顯示降級資訊
+        function displayFallbackInfo() {
+            const chain = executionManager.executionChain;
+            let html = '<h3 class="font-semibold mb-2">執行鏈</h3>';
+            
+            chain.forEach((mode, index) => {
+                const isCurrent = mode.mode === executionManager.currentMode.mode;
+                html += `
+                    <div class="p-2 mb-1 rounded ${isCurrent ? 'bg-blue-100' : 'bg-gray-50'}">
+                        <span class="${isCurrent ? 'font-bold' : ''}">${index + 1}. ${mode.mode}</span>
+                        <span class="text-sm text-gray-600 ml-2">(分數: ${mode.score})</span>
+                    </div>
+                `;
+            });
+            
+            fallbackTestDiv.innerHTML = html;
+        }
+        
+        // 添加測試結果
+        function addTestResult(message, type = 'info') {
+            const timestamp = new Date().toLocaleTimeString();
+            const color = {
+                info: 'text-blue-600',
+                success: 'text-green-600',
+                warning: 'text-orange-600',
+                error: 'text-red-600'
+            }[type] || 'text-gray-600';
+            
+            const entry = document.createElement('div');
+            entry.className = color;
+            entry.textContent = `[${timestamp}] ${message}`;
+            
+            testResultsDiv.appendChild(entry);
+            testResultsDiv.scrollTop = testResultsDiv.scrollHeight;
+            
+            // 限制顯示數量
+            while (testResultsDiv.children.length > 50) {
+                testResultsDiv.removeChild(testResultsDiv.firstChild);
+            }
+        }
+    </script>
+</body>
+</html>
