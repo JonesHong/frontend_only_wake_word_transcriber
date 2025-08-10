@@ -217,10 +217,21 @@ async function handleInitialize(data) {
     
     // 如果尚未初始化 Transformers.js，現在初始化
     if (!transformersInitialized) {
-        // 確定最終的模型路徑
-        const finalModelPath = basePath ? basePath + 'models/' : initialModelBasePath || '/models/';
+        // 確定最終的基礎路徑 - 使用應用程式根目錄，不包含 /models/
+        let finalBasePath;
+        if (basePath) {
+            // 如果是 GitHub Pages，需要完整的 URL
+            if (self.location.origin.includes('github.io')) {
+                finalBasePath = self.location.origin + basePath;
+            } else {
+                finalBasePath = basePath;
+            }
+        } else {
+            // 預設為根目錄
+            finalBasePath = '/';
+        }
         
-        console.log('[WhisperWorker] Initializing Transformers.js with model path:', finalModelPath);
+        console.log('[WhisperWorker] Initializing Transformers.js with base path:', finalBasePath);
         
         // 動態導入 Transformers.js
         const transformersModule = await import('https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2');
@@ -230,7 +241,7 @@ async function handleInitialize(data) {
         // 配置 Transformers.js 環境
         env.allowLocalModels = true;  // 使用本地模型
         env.allowRemoteModels = false;  // 預設禁用遠端模型
-        env.localURL = finalModelPath;  // 設定本地模型路徑
+        env.localURL = finalBasePath;  // 設定應用程式根目錄（不包含 /models/）
         
         transformersInitialized = true;
         console.log('[WhisperWorker] Transformers.js initialized with env.localURL:', env.localURL);
@@ -304,19 +315,19 @@ async function handleLoadModel(data) {
         
         // 只對本地模型進行路徑處理
         // Transformers.js 會將 env.localURL + model 作為完整路徑
-        // env.localURL = '/models/'，所以我們只需要提供相對路徑
+        // env.localURL 現在是應用程式根目錄，所以需要加上 models/ 前綴
         if (model.startsWith('models/')) {
-            // 移除 'models/' 前綴，因為 env.localURL 已經包含了
-            model = model.substring('models/'.length);
+            // 已經有 models/ 前綴，保持不變
+            // model = model;
         } else if (model.startsWith('/models/')) {
-            // 移除 '/models/' 前綴
-            model = model.substring('/models/'.length);
-        } else if (!model.includes('huggingface/') && model.includes('/')) {
-            // 如果是 HuggingFace ID 格式但用於本地，加上 huggingface 前綴
-            model = 'huggingface/' + model;
-        } else if (!model.includes('/')) {
+            // 移除前導斜線
+            model = model.substring(1);
+        } else if (model.includes('/')) {
+            // 如果是 HuggingFace ID 格式（如 Xenova/whisper-base）
+            model = 'models/huggingface/' + model;
+        } else {
             // 如果只是模型名稱，假設是本地的 HuggingFace 結構
-            model = 'huggingface/Xenova/' + model;
+            model = 'models/huggingface/Xenova/' + model;
         }
     }
     
