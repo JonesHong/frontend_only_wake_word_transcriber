@@ -47,8 +47,17 @@ export class WhisperEngine extends SpeechRecognitionEngine {
         await super.initialize(config);
 
         // 設定預設配置
+        // 從 Config 獲取預設模型路徑
+        let defaultModel = 'models/huggingface/Xenova/whisper-base';
+        if (window.Config && window.Config.models.whisper.default) {
+            const modelInfo = window.Config.getModelInfo('whisper', window.Config.models.whisper.default);
+            if (modelInfo) {
+                defaultModel = modelInfo.path;
+            }
+        }
+        
         this.config = {
-            model: 'Xenova/whisper-base',
+            model: defaultModel,
             language: 'zh',  // Whisper 使用 ISO 639-1 代碼
             task: 'transcribe',
             ...this.config

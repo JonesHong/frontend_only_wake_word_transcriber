@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>本地環境測試</title>
+    <style>
+        body {
+            font-family: monospace;
+            padding: 20px;
+            background: #f0f0f0;
+        }
+        .log {
+            background: white;
+            border: 1px solid #ccc;
+            padding: 10px;
+            height: 400px;
+            overflow-y: auto;
+            margin: 20px 0;
+        }
+        .error { color: red; }
+        .success { color: green; }
+        .info { color: blue; }
+        button {
+            padding: 10px 20px;
+            margin: 5px;
+        }
+    </style>
+</head>
+<body>
+    <h1>本地環境模型載入測試</h1>
+    
+    <div>
+        <button onclick="testWorkerDirect()">測試 Worker 直接載入</button>
+        <button onclick="testWithConfig()">測試透過 Config 載入</button>
+        <button onclick="clearLog()">清除日誌</button>
+    </div>
+    
+    <div class="log" id="log"></div>
+
+    <script>
+        const logDiv = document.getElementById('log');
+        
+        function log(message, type = 'info') {
+            const timestamp = new Date().toLocaleTimeString();
+            logDiv.innerHTML += `<div class="${type}">[${timestamp}] ${message}</div>`;
+            logDiv.scrollTop = logDiv.scrollHeight;
+            console.log(`[${type}]`, message);
+        }
+        
+        function clearLog() {
+            logDiv.innerHTML = '';
+        }
+        
+        async function testWorkerDirect() {
+            log('開始測試 Worker 直接載入...');
+            
+            try {
+                const worker = new Worker('js/workers/whisper.worker.js');
+                
+                worker.onmessage = (e) => {
+                    const { type, progress, message, model, error } = e.data;
+                    
+                    switch (type) {
+                        case 'initialized':
+                            log('Worker 初始化成功', 'success');
+                            // 直接傳送完整路徑
+                            worker.postMessage({
+                                type: 'loadModel',
+                                model: 'models/huggingface/Xenova/whisper-base',
+                                config: {
+                                    quantized: false,
+                                    whisperModelSource: 'local'
+                                }
+                            });
+                            break;
+                            
+                        case 'modelLoadProgress':
+                            log(`載入進度: ${progress}%`, 'info');
+                            break;
+                            
+                        case 'modelLoaded':
+                            log(`模型載入成功: ${model}`, 'success');
+                            worker.terminate();
+                            break;
+                            
+                        case 'error':
+                            log(`錯誤: ${error}`, 'error');
+                            worker.terminate();
+                            break;
+                    }
+                };
+                
+                worker.onerror = (error) => {
+                    log(`Worker 錯誤: ${error.message}`, 'error');
+                };
+                
+                // 初始化
+                let basePath = window.location.origin + window.location.pathname.replace(/\/[^\/]*$/, '/');
+                worker.postMessage({
+                    type: 'init',
+                    config: {
+                        language: 'zh',
+                        task: 'transcribe',
+                        modelBasePath: basePath,
+                        quantized: false
+                    }
+                });
+                
+            } catch (error) {
+                log(`測試失敗: ${error.message}`, 'error');
+            }
+        }
+        
+        async function testWithConfig() {
+            log('開始測試透過 Config 載入...');
+            
+            try {
+                // 載入 Config
+                if (!window.Config) {
+                    const script = document.createElement('script');
+                    script.src = 'js/config.js';
+                    document.head.appendChild(script);
+                    await new Promise(resolve => script.onload = resolve);
+                }
+                
+                // 初始化 Config
+                await Config.init();
+                log('Config 初始化成功', 'success');
+                
+                // 獲取可用模型
+                const models = Config.getAvailableModels('whisper');
+                log(`可用模型: ${models.join(', ')}`, 'info');
+                
+                // 獲取預設模型資訊
+                const defaultModel = Config.models.whisper.default;
+                const modelInfo = Config.getModelInfo('whisper', defaultModel);
+                log(`預設模型: ${defaultModel}`, 'info');
+                log(`模型路徑: ${modelInfo.path}`, 'info');
+                log(`量化: ${modelInfo.quantized}`, 'info');
+                
+                // 測試 Worker
+                const worker = new Worker('js/workers/whisper.worker.js');
+                
+                worker.onmessage = (e) => {
+                    const { type, progress, model, error } = e.data;
+                    
+                    switch (type) {
+                        case 'initialized':
+                            log('Worker 初始化成功', 'success');
+                            // 使用 Config 的模型路徑
+                            worker.postMessage({
+                                type: 'loadModel',
+                                model: modelInfo.path,
+                                config: {
+                                    quantized: modelInfo.quantized || false,
+                                    whisperModelSource: 'local'
+                                }
+                            });
+                            break;
+                            
+                        case 'modelLoadProgress':
+                            log(`載入進度: ${progress}%`, 'info');
+                            break;
+                            
+                        case 'modelLoaded':
+                            log(`模型載入成功: ${model}`, 'success');
+                            worker.terminate();
+                            break;
+                            
+                        case 'error':
+                            log(`錯誤: ${error}`, 'error');
+                            worker.terminate();
+                            break;
+                    }
+                };
+                
+                // 初始化
+                let basePath = window.location.origin + window.location.pathname.replace(/\/[^\/]*$/, '/');
+                worker.postMessage({
+                    type: 'init',
+                    config: {
+                        language: 'zh',
+                        task: 'transcribe',
+                        modelBasePath: basePath,
+                        quantized: modelInfo.quantized || false
+                    }
+                });
+                
+            } catch (error) {
+                log(`測試失敗: ${error.message}`, 'error');
+            }
+        }
+        
+        // 頁面載入時顯示環境資訊
+        window.onload = () => {
+            const isLocal = window.location.protocol === 'file:' || 
+                           window.location.hostname === 'localhost' || 
+                           window.location.hostname === '127.0.0.1';
+            log(`環境: ${isLocal ? '本地開發' : '遠端伺服器'}`);
+            log(`URL: ${window.location.href}`);
+            log('測試工具已準備就緒');
+        };
+    </script>
+</body>
+</html>

@@ -214,6 +214,10 @@ const Config = {
 
   // Check if model directory has required files (with parallel checking)
   async checkWhisperModelExists(modelPath, files) {
+    // Detect if we're on GitHub Pages
+    const isGitHubPages = window.location.hostname.includes('github') || 
+                         window.location.hostname.includes('github.io');
+    
     // Check both quantized and standard versions
     const quantizedFiles = [
       'onnx/encoder_model_quantized.onnx',
@@ -229,28 +233,39 @@ const Config = {
     const checkPromises = [];
     const fileMap = new Map();
     
-    // Add quantized file checks
-    quantizedFiles.forEach(file => {
-      const fullPath = `${modelPath}/${file}`;
-      const promise = this.checkModelExists(fullPath);
-      checkPromises.push(promise);
-      fileMap.set(promise, { type: 'quantized', file });
-    });
-    
-    // Add standard file checks
-    standardFiles.forEach(file => {
-      const fullPath = `${modelPath}/${file}`;
-      const promise = this.checkModelExists(fullPath);
-      checkPromises.push(promise);
-      fileMap.set(promise, { type: 'standard', file });
-    });
+    // On GitHub Pages, only check quantized files
+    if (isGitHubPages) {
+      // Only check quantized file checks for GitHub Pages
+      quantizedFiles.forEach(file => {
+        const fullPath = `${modelPath}/${file}`;
+        const promise = this.checkModelExists(fullPath);
+        checkPromises.push(promise);
+        fileMap.set(promise, { type: 'quantized', file });
+      });
+    } else {
+      // Add quantized file checks
+      quantizedFiles.forEach(file => {
+        const fullPath = `${modelPath}/${file}`;
+        const promise = this.checkModelExists(fullPath);
+        checkPromises.push(promise);
+        fileMap.set(promise, { type: 'quantized', file });
+      });
+      
+      // Add standard file checks
+      standardFiles.forEach(file => {
+        const fullPath = `${modelPath}/${file}`;
+        const promise = this.checkModelExists(fullPath);
+        checkPromises.push(promise);
+        fileMap.set(promise, { type: 'standard', file });
+      });
+    }
     
     // Wait for all checks to complete in parallel
     const results = await Promise.all(checkPromises);
     
     // Process results
     let hasQuantized = true;
-    let hasStandard = true;
+    let hasStandard = !isGitHubPages; // On GitHub Pages, don't check standard
     
     results.forEach((exists, index) => {
       const promise = checkPromises[index];

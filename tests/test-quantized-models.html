@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>測試量化模型載入</title>
+    <style>
+        body {
+            font-family: monospace;
+            padding: 20px;
+            background: #1a1a1a;
+            color: #0f0;
+        }
+        .log {
+            padding: 10px;
+            border: 1px solid #0f0;
+            background: #000;
+            height: 400px;
+            overflow-y: auto;
+            margin: 20px 0;
+        }
+        .error {
+            color: #f00;
+        }
+        .success {
+            color: #0f0;
+        }
+        .warning {
+            color: #ff0;
+        }
+        button {
+            padding: 10px 20px;
+            margin: 5px;
+            background: #0f0;
+            color: #000;
+            border: none;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        button:hover {
+            background: #0a0;
+        }
+    </style>
+</head>
+<body>
+    <h1>量化模型載入測試</h1>
+    <p>此頁面用於測試 GitHub Pages 上的量化模型載入</p>
+    
+    <div>
+        <button onclick="testConfig()">測試 Config 載入</button>
+        <button onclick="testWhisperWorker()">測試 Whisper Worker</button>
+        <button onclick="clearLog()">清除日誌</button>
+    </div>
+    
+    <div class="log" id="log"></div>
+
+    <script>
+        const logDiv = document.getElementById('log');
+        
+        function log(message, type = 'info') {
+            const timestamp = new Date().toLocaleTimeString();
+            const className = type === 'error' ? 'error' : type === 'success' ? 'success' : type === 'warning' ? 'warning' : '';
+            logDiv.innerHTML += `<div class="${className}">[${timestamp}] ${message}</div>`;
+            logDiv.scrollTop = logDiv.scrollHeight;
+            console.log(`[${type}]`, message);
+        }
+        
+        function clearLog() {
+            logDiv.innerHTML = '';
+        }
+        
+        async function testConfig() {
+            log('開始測試 Config 載入...');
+            
+            try {
+                // 動態載入 config.js
+                const script = document.createElement('script');
+                script.src = 'js/config.js';
+                document.head.appendChild(script);
+                
+                await new Promise(resolve => {
+                    script.onload = resolve;
+                });
+                
+                log('Config.js 載入成功', 'success');
+                
+                // 初始化 Config
+                const registryLoaded = await Config.loadRegistry();
+                if (registryLoaded) {
+                    log('Registry 載入成功', 'success');
+                    
+                    // 檢查是否為 GitHub Pages 環境
+                    const isGitHubPages = window.location.hostname.includes('github') || 
+                                         window.location.hostname.includes('github.io');
+                    log(`環境: ${isGitHubPages ? 'GitHub Pages' : '本地開發'}`);
+                    
+                    // 檢查可用的 Whisper 模型
+                    const whisperModels = Config.getAvailableModels('whisper');
+                    log(`可用的 Whisper 模型: ${whisperModels.join(', ')}`, 'success');
+                    
+                    // 檢查每個模型的詳細資訊
+                    for (const modelId of whisperModels) {
+                        const modelInfo = Config.getModelInfo('whisper', modelId);
+                        log(`模型 ${modelId}: quantized=${modelInfo.quantized}, path=${modelInfo.path}`);
+                        
+                        // 測試檢查模型文件
+                        if (modelInfo.path) {
+                            const checkResult = await Config.checkWhisperModelExists(modelInfo.path);
+                            if (checkResult.exists) {
+                                log(`✓ 模型 ${modelId} 文件存在 (quantized=${checkResult.hasQuantized}, standard=${checkResult.hasStandard})`, 'success');
+                            } else {
+                                log(`✗ 模型 ${modelId} 文件不存在`, 'error');
+                            }
+                        }
+                    }
+                } else {
+                    log('Registry 載入失敗', 'error');
+                }
+            } catch (error) {
+                log(`測試失敗: ${error.message}`, 'error');
+                console.error(error);
+            }
+        }
+        
+        async function testWhisperWorker() {
+            log('開始測試 Whisper Worker...');
+            
+            try {
+                // 創建 Worker
+                const worker = new Worker('js/workers/whisper.worker.js');
+                
+                log('Whisper Worker 創建成功', 'success');
+                
+                // 設置消息處理
+                worker.onmessage = (e) => {
+                    const { type, progress, message, model, error } = e.data;
+                    
+                    switch (type) {
+                        case 'initialized':
+                            log('Worker 初始化成功', 'success');
+                            // 嘗試載入模型
+                            worker.postMessage({
+                                type: 'loadModel',
+                                model: 'models/huggingface/Xenova/whisper-base',
+                                config: {
+                                    quantized: true,
+                                    whisperModelSource: 'local'
+                                }
+                            });
+                            break;
+                            
+                        case 'modelLoadProgress':
+                            log(`模型載入進度: ${progress}%`);
+                            break;
+                            
+                        case 'modelLoaded':
+                            log(`模型載入成功: ${model}`, 'success');
+                            break;
+                            
+                        case 'error':
+                            log(`Worker 錯誤: ${error}`, 'error');
+                            break;
+                            
+                        default:
+                            log(`收到消息: ${type} - ${JSON.stringify(e.data)}`);
+                    }
+                };
+                
+                worker.onerror = (error) => {
+                    log(`Worker 錯誤: ${error.message}`, 'error');
+                };
+                
+                // 初始化 Worker
+                const isGitHubPages = window.location.hostname.includes('github') || 
+                                     window.location.hostname.includes('github.io');
+                let basePath = window.location.origin + window.location.pathname.replace(/\/[^\/]*$/, '/');
+                
+                worker.postMessage({
+                    type: 'init',
+                    config: {
+                        language: 'zh',
+                        task: 'transcribe',
+                        modelBasePath: basePath,
+                        quantized: true,
+                        whisperModelSource: 'local'
+                    }
+                });
+                
+            } catch (error) {
+                log(`Worker 測試失敗: ${error.message}`, 'error');
+                console.error(error);
+            }
+        }
+        
+        // 頁面載入時自動執行基本檢查
+        window.onload = () => {
+            const isGitHubPages = window.location.hostname.includes('github') || 
+                                 window.location.hostname.includes('github.io');
+            log(`當前環境: ${isGitHubPages ? 'GitHub Pages' : '本地開發環境'}`);
+            log(`URL: ${window.location.href}`);
+            log(`Origin: ${window.location.origin}`);
+            log(`Pathname: ${window.location.pathname}`);
+            log('測試工具已準備就緒，請點擊按鈕開始測試');
+        };
+    </script>
+</body>
+</html>

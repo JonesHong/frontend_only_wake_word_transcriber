@@ -248,8 +248,8 @@ async function handleInitialize(data) {
         // 配置 Transformers.js 環境
         env.allowLocalModels = true;  // 使用本地模型
         env.allowRemoteModels = false;  // 預設禁用遠端模型
-        env.localModelPath = finalBasePath;  // 設定本地模型路徑
-        env.localURL = finalBasePath;  // 設定應用程式根目錄（不包含 /models/）
+        env.localModelPath = finalBasePath + 'models/';  // 設定本地模型路徑
+        env.localURL = finalBasePath + 'models/';  // 設定本地模型的基礎路徑
         
         // 覆寫檔案載入邏輯以支援量化模型
         // 儲存原始的 getFile 函數
@@ -348,20 +348,22 @@ async function handleLoadModel(data) {
         
         // 只對本地模型進行路徑處理
         // Transformers.js 會將 env.localURL + model 作為完整路徑
-        // env.localURL 現在是應用程式根目錄，所以需要加上 models/ 前綴
+        // env.localURL 現在設置為基礎路徑 + 'models/'
         if (model.startsWith('models/')) {
-            // 已經有 models/ 前綴，保持不變
-            // model = model;
+            // 已經有 models/ 前綴，需要移除因為 env.localURL 已包含
+            model = model.substring(7); // 移除 'models/'
         } else if (model.startsWith('/models/')) {
-            // 移除前導斜線
-            model = model.substring(1);
-        } else if (model.includes('/')) {
+            // 移除前導斜線和 models/
+            model = model.substring(8);
+        } else if (model.includes('/') && !model.startsWith('huggingface/')) {
             // 如果是 HuggingFace ID 格式（如 Xenova/whisper-base）
-            model = 'models/huggingface/' + model;
-        } else {
+            // 需要加上 huggingface/ 前綴
+            model = 'huggingface/' + model;
+        } else if (!model.includes('/')) {
             // 如果只是模型名稱，假設是本地的 HuggingFace 結構
-            model = 'models/huggingface/Xenova/' + model;
+            model = 'huggingface/Xenova/' + model;
         }
+        // 如果已經是正確格式（如 huggingface/Xenova/whisper-base），保持不變
     }
     
     console.log('[WhisperWorker] Loading model from path:', model, 'quantized:', quantized);
