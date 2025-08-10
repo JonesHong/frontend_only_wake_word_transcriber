@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>本地模型路徑測試</title>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #1a1a1a;
+            color: #e0e0e0;
+        }
+        h1 { color: #4CAF50; }
+        .test-section {
+            background: #2a2a2a;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        .path-info {
+            background: #333;
+            padding: 15px;
+            border-radius: 4px;
+            margin: 10px 0;
+            font-family: monospace;
+        }
+        .success { color: #4CAF50; }
+        .error { color: #f44336; }
+        .warning { color: #FFC107; }
+        .info { color: #2196F3; }
+        button {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover { background: #45a049; }
+        button:disabled {
+            background: #555;
+            cursor: not-allowed;
+        }
+        #log {
+            background: #1a1a1a;
+            padding: 15px;
+            border-radius: 4px;
+            max-height: 400px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 12px;
+            white-space: pre-wrap;
+        }
+        .log-entry { margin: 2px 0; }
+    </style>
+</head>
+<body>
+    <h1>本地模型路徑測試</h1>
+    
+    <div class="test-section">
+        <h2>環境資訊</h2>
+        <div class="path-info">
+            <div>當前 URL: <span id="currentUrl"></span></div>
+            <div>基礎路徑: <span id="basePath"></span></div>
+            <div>模型路徑: <span id="modelPath"></span></div>
+            <div>Worker 路徑: <span id="workerPath"></span></div>
+        </div>
+    </div>
+    
+    <div class="test-section">
+        <h2>模型檔案檢查</h2>
+        <button onclick="checkModelFiles()">檢查模型檔案</button>
+        <div id="fileCheckResults"></div>
+    </div>
+    
+    <div class="test-section">
+        <h2>Whisper Worker 測試</h2>
+        <button onclick="testWhisperWorker()">測試 Worker 初始化</button>
+        <button onclick="testModelLoading()">測試模型載入</button>
+        <div id="workerTestResults"></div>
+    </div>
+    
+    <div class="test-section">
+        <h2>詳細日誌</h2>
+        <div id="log"></div>
+    </div>
+    
+    <script type="module">
+        // 計算路徑
+        const basePath = window.location.pathname.replace(/\/[^\/]*$/, '');
+        const modelPath = basePath + '/models/';
+        const workerPath = basePath + '/js/workers/whisper.worker.js';
+        
+        // 顯示路徑資訊
+        document.getElementById('currentUrl').textContent = window.location.href;
+        document.getElementById('basePath').textContent = basePath;
+        document.getElementById('modelPath').textContent = modelPath;
+        document.getElementById('workerPath').textContent = workerPath;
+        
+        // 日誌功能
+        function log(message, level = 'info') {
+            const logDiv = document.getElementById('log');
+            const timestamp = new Date().toISOString().split('T')[1].split('.')[0];
+            const entry = document.createElement('div');
+            entry.className = `log-entry ${level}`;
+            entry.textContent = `[${timestamp}] ${message}`;
+            logDiv.appendChild(entry);
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+        
+        // 檢查模型檔案
+        window.checkModelFiles = async function() {
+            const resultsDiv = document.getElementById('fileCheckResults');
+            resultsDiv.innerHTML = '<div class="info">檢查中...</div>';
+            
+            const filesToCheck = [
+                'huggingface/Xenova/whisper-base/config.json',
+                'huggingface/Xenova/whisper-base/tokenizer_config.json',
+                'huggingface/Xenova/whisper-base/tokenizer.json',
+                'huggingface/Xenova/whisper-base/onnx/encoder_model_quantized.onnx',
+                'huggingface/Xenova/whisper-base/onnx/decoder_model_merged_quantized.onnx'
+            ];
+            
+            let results = '<h3>檔案檢查結果：</h3>';
+            
+            for (const file of filesToCheck) {
+                const fullPath = modelPath + file;
+                try {
+                    const response = await fetch(fullPath, { method: 'HEAD' });
+                    if (response.ok) {
+                        results += `<div class="success">✓ ${file}</div>`;
+                        log(`檔案存在: ${file}`, 'success');
+                    } else {
+                        results += `<div class="error">✗ ${file} (${response.status})</div>`;
+                        log(`檔案不存在: ${file} (${response.status})`, 'error');
+                    }
+                } catch (error) {
+                    results += `<div class="error">✗ ${file} (${error.message})</div>`;
+                    log(`檢查錯誤: ${file} - ${error.message}`, 'error');
+                }
+            }
+            
+            resultsDiv.innerHTML = results;
+        };
+        
+        // 測試 Whisper Worker
+        window.testWhisperWorker = async function() {
+            const resultsDiv = document.getElementById('workerTestResults');
+            resultsDiv.innerHTML = '<div class="info">初始化 Worker...</div>';
+            
+            try {
+                log('創建 Worker: ' + workerPath);
+                const worker = new Worker(workerPath, { type: 'module' });
+                
+                // 設定訊息處理
+                worker.onmessage = (event) => {
+                    log(`Worker 訊息: ${JSON.stringify(event.data)}`, 'info');
+                };
+                
+                worker.onerror = (error) => {
+                    log(`Worker 錯誤: ${error}`, 'error');
+                    resultsDiv.innerHTML = `<div class="error">Worker 錯誤: ${error}</div>`;
+                };
+                
+                // 發送初始化訊息
+                log('發送初始化訊息，basePath: ' + basePath);
+                worker.postMessage({
+                    type: 'initialize',
+                    messageId: 'init-1',
+                    config: {
+                        language: 'zh',
+                        task: 'transcribe',
+                        whisperOutputMode: 'streaming',
+                        basePath: basePath
+                    }
+                });
+                
+                // 等待回應
+                await new Promise((resolve) => {
+                    worker.addEventListener('message', function handler(event) {
+                        if (event.data.messageId === 'init-1') {
+                            worker.removeEventListener('message', handler);
+                            resolve(event.data);
+                        }
+                    });
+                });
+                
+                resultsDiv.innerHTML = '<div class="success">✓ Worker 初始化成功！</div>';
+                log('Worker 初始化成功', 'success');
+                
+                // 清理
+                worker.terminate();
+                
+            } catch (error) {
+                resultsDiv.innerHTML = `<div class="error">✗ 錯誤: ${error.message}</div>`;
+                log(`測試失敗: ${error.message}`, 'error');
+            }
+        };
+        
+        // 測試模型載入
+        window.testModelLoading = async function() {
+            const resultsDiv = document.getElementById('workerTestResults');
+            resultsDiv.innerHTML = '<div class="info">測試模型載入...</div>';
+            
+            try {
+                // Import WhisperEngine
+                const module = await import('../js/modules/engines/whisper-engine.js');
+                const WhisperEngine = module.WhisperEngine;
+                
+                log('創建 WhisperEngine 實例');
+                const engine = new WhisperEngine();
+                
+                // 監聽事件
+                engine.on('loadProgress', (data) => {
+                    log(`載入進度: ${data.progress}% - ${data.message}`, 'info');
+                });
+                
+                engine.on('modelLoaded', () => {
+                    log('模型載入完成！', 'success');
+                });
+                
+                engine.on('error', (error) => {
+                    log(`錯誤: ${error}`, 'error');
+                });
+                
+                // 初始化
+                await engine.initialize();
+                log('WhisperEngine 初始化完成');
+                
+                // 載入模型
+                log('開始載入模型: whisper-base');
+                await engine.loadModel('whisper-base', 'local');
+                
+                resultsDiv.innerHTML = '<div class="success">✓ 模型載入成功！</div>';
+                
+                // 清理
+                engine.cleanup();
+                
+            } catch (error) {
+                resultsDiv.innerHTML = `<div class="error">✗ 錯誤: ${error.message}</div>`;
+                log(`模型載入失敗: ${error.message}\n${error.stack}`, 'error');
+            }
+        };
+    </script>
+</body>
+</html>

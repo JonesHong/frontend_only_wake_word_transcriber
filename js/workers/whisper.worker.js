@@ -11,9 +11,28 @@ import { pipeline, env } from 'https://cdn.jsdelivr.net/npm/@xenova/transformers
 // 預設為本地模型，可通過配置更改
 env.allowLocalModels = true;  // 使用本地模型
 env.allowRemoteModels = false;  // 預設禁用遠端模型
-// 使用相對於當前頁面的路徑，支援 GitHub Pages 子目錄
-const basePath = self.location.pathname.replace(/\/[^\/]*\.worker\.js$/, '').replace(/\/js\/workers$/, '');
-env.localURL = basePath + '/models/';  // 本地模型的基礎路徑
+
+// 動態計算本地模型路徑，支援 GitHub Pages 子目錄
+// self.location.href 可能是 blob: URL，需要從 origin 和 pathname 重建
+let modelBasePath = '/models/';
+try {
+    // 嘗試從 Worker 的 location 獲取基礎路徑
+    if (self.location.href.startsWith('blob:')) {
+        // Blob URL 的情況，使用主頁面的路徑
+        // 需要從主線程傳遞過來，暫時使用預設值
+        modelBasePath = '/models/';
+    } else {
+        // 正常的 Worker URL
+        const workerPath = self.location.pathname;
+        // 移除 worker 檔名和 js/workers 目錄
+        modelBasePath = workerPath.replace(/\/js\/workers\/[^\/]*$/, '') + '/models/';
+    }
+} catch (e) {
+    console.warn('[WhisperWorker] Failed to calculate model base path, using default:', e);
+}
+
+env.localURL = modelBasePath;  // 本地模型的基礎路徑
+console.log('[WhisperWorker] Model base path set to:', env.localURL);
 // 設置 WASM 路徑 (v2 版本不需要 backends 配置)
 // env.backends.onnx.wasm.wasmPaths = 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2/dist/';
 
@@ -190,14 +209,21 @@ self.onmessage = async (event) => {
  * 初始化 Worker
  */
 async function handleInitialize(data) {
-    const { language = 'zh', task = 'transcribe', whisperOutputMode = 'streaming' } = data.config || {};
+    const { language = 'zh', task = 'transcribe', whisperOutputMode = 'streaming', basePath } = data.config || {};
     currentLanguage = normalizeLanguage(language);
     currentTask = task;
     outputMode = whisperOutputMode;
     
+    // 如果主線程提供了 basePath，更新模型路徑
+    if (basePath) {
+        env.localURL = basePath + '/models/';
+        console.log('[WhisperWorker] Updated model base path from main thread:', env.localURL);
+    }
+    
     console.log('[WhisperWorker] Initialized with:', {
         language: currentLanguage,
-        task: currentTask
+        task: currentTask,
+        modelBasePath: env.localURL
     });
 }
 

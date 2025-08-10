@@ -117,12 +117,13 @@ export class WhisperEngine extends SpeechRecognitionEngine {
                 this.emit('error', error);
             };
 
-            // 初始化 Worker（包含輸出模式配置）
+            // 初始化 Worker（包含輸出模式配置和基礎路徑）
             await this.sendWorkerMessage({
                 type: 'initialize',
                 config: {
                     ...this.config,
-                    whisperOutputMode: window.Config?.speech?.whisperOutputMode || 'streaming'
+                    whisperOutputMode: window.Config?.speech?.whisperOutputMode || 'streaming',
+                    basePath: basePath  // 傳遞基礎路徑給 Worker
                 }
             });
 
