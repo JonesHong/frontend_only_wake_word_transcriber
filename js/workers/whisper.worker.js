@@ -5,12 +5,11 @@
 
 // 使用 @xenova/transformers v2 以支援回調函數實現即時輸出
 // v2 版本支援 callback_function 和 chunk_callback
-import { pipeline, env } from 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2';
+// 注意：改為動態導入以確保在設定正確路徑後才載入
+let pipeline, env;
 
-// 配置 Transformers.js 環境
-// 預設為本地模型，可通過配置更改
-env.allowLocalModels = true;  // 使用本地模型
-env.allowRemoteModels = false;  // 預設禁用遠端模型
+// Transformers.js 環境配置將在初始化時設定
+let transformersInitialized = false;
 
 // 動態計算本地模型路徑，支援 GitHub Pages 子目錄
 // self.location.href 可能是 blob: URL，需要從 origin 和 pathname 重建
@@ -20,7 +19,8 @@ try {
     if (self.location.href.startsWith('blob:')) {
         // Blob URL 的情況，使用主頁面的路徑
         // 需要從主線程傳遞過來，暫時使用預設值
-        modelBasePath = '/models/';
+        // 先不設定，等待主線程傳遞正確的路徑
+        modelBasePath = null;
     } else {
         // 正常的 Worker URL
         const workerPath = self.location.pathname;
@@ -31,8 +31,9 @@ try {
     console.warn('[WhisperWorker] Failed to calculate model base path, using default:', e);
 }
 
-env.localURL = modelBasePath;  // 本地模型的基礎路徑
-console.log('[WhisperWorker] Model base path set to:', env.localURL);
+// 初始路徑將在收到主線程配置後設定
+let initialModelBasePath = modelBasePath;
+console.log('[WhisperWorker] Initial model base path:', initialModelBasePath);
 // 設置 WASM 路徑 (v2 版本不需要 backends 配置)
 // env.backends.onnx.wasm.wasmPaths = 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2/dist/';
 
@@ -214,16 +215,31 @@ async function handleInitialize(data) {
     currentTask = task;
     outputMode = whisperOutputMode;
     
-    // 如果主線程提供了 basePath，更新模型路徑
-    if (basePath) {
-        env.localURL = basePath + 'models/';
-        console.log('[WhisperWorker] Updated model base path from main thread:', env.localURL);
+    // 如果尚未初始化 Transformers.js，現在初始化
+    if (!transformersInitialized) {
+        // 確定最終的模型路徑
+        const finalModelPath = basePath ? basePath + 'models/' : initialModelBasePath || '/models/';
+        
+        console.log('[WhisperWorker] Initializing Transformers.js with model path:', finalModelPath);
+        
+        // 動態導入 Transformers.js
+        const transformersModule = await import('https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2');
+        pipeline = transformersModule.pipeline;
+        env = transformersModule.env;
+        
+        // 配置 Transformers.js 環境
+        env.allowLocalModels = true;  // 使用本地模型
+        env.allowRemoteModels = false;  // 預設禁用遠端模型
+        env.localURL = finalModelPath;  // 設定本地模型路徑
+        
+        transformersInitialized = true;
+        console.log('[WhisperWorker] Transformers.js initialized with env.localURL:', env.localURL);
     }
     
     console.log('[WhisperWorker] Initialized with:', {
         language: currentLanguage,
         task: currentTask,
-        modelBasePath: env.localURL
+        modelBasePath: env ? env.localURL : 'not yet initialized'
     });
 }
 
