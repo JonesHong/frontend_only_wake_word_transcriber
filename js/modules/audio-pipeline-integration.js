@@ -90,8 +90,12 @@ export class AudioPipelineIntegration {
     async loadAudioWorklet(audioSpec) {
         const audioContext = this.audioInputManager.audioContext;
         
+        // 建構相對路徑
+        const basePath = window.location.pathname.substring(0, window.location.pathname.lastIndexOf('/') + 1);
+        const workletPath = basePath + 'js/worklets/audio-processor.worklet.js';
+        
         // 載入 worklet 模組
-        await audioContext.audioWorklet.addModule('/js/worklets/audio-processor.worklet.js');
+        await audioContext.audioWorklet.addModule(workletPath);
         
         // 創建 worklet 節點
         this.audioWorkletNode = new AudioWorkletNode(

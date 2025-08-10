@@ -195,6 +195,9 @@ export class WhisperEngine extends SpeechRecognitionEngine {
                     const text = data.data.text || '';
                     const chunks = data.data.chunks || [];
                     
+                    // 使用 Worker 傳回的 fileId（如果有的話），否則使用當前的 fileId
+                    const fileId = data.fileId || this._currentFileId || null;
+                    
                     // 發送兩種事件以支援不同的使用場景
                     this.emit('interimResult', {
                         transcript: text,
@@ -205,7 +208,8 @@ export class WhisperEngine extends SpeechRecognitionEngine {
                     // 專門為檔案轉譯的串流更新
                     this.emit('interimTranscription', {
                         transcript: text,
-                        chunks: chunks
+                        chunks: chunks,
+                        fileId: fileId
                     });
                     
                     // 記錄串流更新（包含 chunks 資訊）
@@ -493,8 +497,11 @@ export class WhisperEngine extends SpeechRecognitionEngine {
     async transcribeFile(file, options = {}) {
         // 延遲載入模型
         await this.loadModel();
+        
+        // 獲取 fileId（如果有的話）
+        const fileId = options.fileId || this._currentFileId;
 
-        console.log('[WhisperEngine] Starting file transcription');
+        console.log('[WhisperEngine] Starting file transcription', fileId ? `for file: ${fileId}` : '');
 
         // 使用 Web Audio API 解碼音訊（支援 MP3, WAV, OGG 等）
         let audioData;
@@ -530,10 +537,16 @@ export class WhisperEngine extends SpeechRecognitionEngine {
             language = this.languageMap[language];
         }
 
+        // 設定當前檔案 ID（用於事件追蹤）
+        if (fileId) {
+            this._currentFileId = fileId;
+        }
+        
         // 發送給 Worker 進行轉譯（包含輸出模式和模型來源）
         const result = await this.sendWorkerMessage({
             type: 'transcribeFile',
             audio: audioData,
+            fileId: fileId,  // 傳遞 fileId 給 Worker
             config: {
                 language: language,
                 task: options.task || this.config.task,
@@ -542,6 +555,11 @@ export class WhisperEngine extends SpeechRecognitionEngine {
                 whisperModelSource: window.Config?.speech?.whisperModelSource || 'local'
             }
         });
+        
+        // 清除當前檔案 ID
+        if (fileId && this._currentFileId === fileId) {
+            delete this._currentFileId;
+        }
 
         return result.transcript;
     }

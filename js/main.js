@@ -50,6 +50,7 @@ class VoiceAssistantApp {
         this.isRecording = false;
         this.mediaRecorder = null;
         this.recordedChunks = [];
+        this.isBatchProcessing = false; // 新增：標記是否正在處理批次任務
         
         // 語音記錄
         this.transcriptionHistory = [];
@@ -172,20 +173,26 @@ class VoiceAssistantApp {
             
             // 設定事件監聽器
             this.speechRecognitionManager.on('result', (data) => {
-                this.handleTranscription({
-                    transcript: data.transcript,
-                    isFinal: true,
-                    confidence: data.confidence || 1.0,
-                    engine: data.engine
-                });
+                // 只在非批次處理模式時更新即時字幕
+                if (!this.isBatchProcessing) {
+                    this.handleTranscription({
+                        transcript: data.transcript,
+                        isFinal: true,
+                        confidence: data.confidence || 1.0,
+                        engine: data.engine
+                    });
+                }
             });
             
             this.speechRecognitionManager.on('interimResult', (data) => {
-                this.handleTranscription({
-                    transcript: data.transcript,
-                    isFinal: false,
-                    engine: data.engine
-                });
+                // 只在非批次處理模式時更新即時字幕
+                if (!this.isBatchProcessing) {
+                    this.handleTranscription({
+                        transcript: data.transcript,
+                        isFinal: false,
+                        engine: data.engine
+                    });
+                }
             });
             
             this.speechRecognitionManager.on('error', (error) => {
@@ -1615,6 +1622,9 @@ class VoiceAssistantApp {
     
     // 轉譯音訊檔案
     async transcribeAudioFile(file, audioBlob = null) {
+        // 標記為批次處理模式
+        this.isBatchProcessing = true;
+        
         const fileId = Date.now() + '_' + Math.random().toString(36).substr(2, 9);
         
         // 如果是上傳的檔案，建立 blob
@@ -1629,9 +1639,13 @@ class VoiceAssistantApp {
             // 開始計時
             const startTime = performance.now();
             
+            // 為此檔案建立唯一的事件處理器名稱
+            const eventHandlerName = `interim_${fileId}`;
+            
             // 設定即時更新的回調（用於 Whisper 串流顯示）
             const handleInterimUpdate = (data) => {
-                if (data && data.transcript) {
+                // 確認這個事件是否屬於當前檔案
+                if (data && data.transcript && data.fileId === fileId) {
                     // 即時更新轉譯內容
                     const item = document.getElementById(`batch_${fileId}`);
                     if (item) {
@@ -1659,21 +1673,24 @@ class VoiceAssistantApp {
             
             // 監聽即時轉譯更新（針對 Whisper）
             if (this.speechRecognitionManager) {
-                // 暫時監聽 interimTranscription 事件
+                // 使用唯一的事件名稱監聽
                 const whisperEngine = this.speechRecognitionManager.engines.get('whisper');
                 if (whisperEngine) {
+                    // 將 fileId 傳遞給 transcribeFile 以便追蹤
+                    whisperEngine._currentFileId = fileId;
                     whisperEngine.on('interimTranscription', handleInterimUpdate);
                 }
             }
             
             // 使用 SpeechRecognitionManager 轉譯
-            const transcript = await this.speechRecognitionManager.transcribeFile(file);
+            const transcript = await this.speechRecognitionManager.transcribeFile(file, fileId);
             
             // 移除事件監聽器
             if (this.speechRecognitionManager) {
                 const whisperEngine = this.speechRecognitionManager.engines.get('whisper');
                 if (whisperEngine) {
                     whisperEngine.off('interimTranscription', handleInterimUpdate);
+                    delete whisperEngine._currentFileId;
                 }
             }
             
@@ -1686,6 +1703,9 @@ class VoiceAssistantApp {
         } catch (error) {
             console.error('轉譯失敗:', error);
             this.updateBatchResultItem(fileId, null, null, error.message);
+        } finally {
+            // 恢復為非批次處理模式
+            this.isBatchProcessing = false;
         }
     }
     

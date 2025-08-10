@@ -442,7 +442,7 @@ async function handleTranscribe(data) {
         await handleLoadModel({ model: 'huggingface/Xenova/whisper-base' });
     }
 
-    const { audio, config = {} } = data;
+    const { audio, config = {}, fileId } = data;
     const language = normalizeLanguage(config.language || currentLanguage);
     const task = config.task || currentTask;
     // 允許在轉譯時動態設定輸出模式
@@ -527,13 +527,14 @@ async function handleTranscribe(data) {
             text: fixEncodingIssues(chunk.text || '')
         }));
 
-        // 發送格式化的數據
+        // 發送格式化的數據（包含 fileId 如果有的話）
         self.postMessage({
             type: 'transcriptionUpdate',
             data: {
                 text: text,
                 chunks: chunks
-            }
+            },
+            fileId: fileId  // 傳遞 fileId 以識別是哪個檔案的轉譯
         });
         
         // 調試日誌（只在有內容時）
@@ -549,13 +550,14 @@ async function handleTranscribe(data) {
     try {
         isTranscribing = true;
         
-        // 發送開始轉譯的訊息
+        // 發送開始轉譯的訊息（包含 fileId 如果有的話）
         self.postMessage({
             type: 'transcriptionUpdate',
             data: {
                 text: '正在處理音訊...',
                 chunks: []
-            }
+            },
+            fileId: fileId  // 傳遞 fileId
         });
         
         // 檢查是否為 Distil-Whisper 模型

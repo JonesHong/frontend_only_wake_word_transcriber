@@ -320,10 +320,21 @@ export class SpeechRecognitionManager extends EventEmitter {
     /**
      * 轉譯音訊檔案
      * @param {File|Blob|ArrayBuffer} file - 音訊檔案
-     * @param {Object} options - 轉譯選項
+     * @param {string|Object} fileIdOrOptions - 檔案ID或選項
      * @returns {Promise<string>}
      */
-    async transcribeFile(file, options = {}) {
+    async transcribeFile(file, fileIdOrOptions = {}) {
+        // 處理參數 - 支援舊的API和新的fileId參數
+        let options = {};
+        let fileId = null;
+        
+        if (typeof fileIdOrOptions === 'string') {
+            fileId = fileIdOrOptions;
+        } else {
+            options = fileIdOrOptions;
+            fileId = options.fileId;
+        }
+        
         // 檔案轉譯優先使用 Whisper
         let engine = this.engines.get('whisper');
         
@@ -338,6 +349,11 @@ export class SpeechRecognitionManager extends EventEmitter {
 
         if (!engine.isInitialized) {
             await engine.initialize(this.config);
+        }
+        
+        // 傳遞 fileId 給引擎
+        if (fileId) {
+            options.fileId = fileId;
         }
 
         return await engine.transcribeFile(file, options);
