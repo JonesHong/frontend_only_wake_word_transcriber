@@ -8,7 +8,7 @@ const Config = {
   // Application metadata
   app: {
     name: 'Frontend-Only Wake Word Transcriber',
-    version: '2.0.0',
+    version: '2.0.1',
     description: 'Pure frontend voice assistant with wake word detection',
     repository: 'https://github.com/JonesHong/frontend_only_wake_word_transcriber'
   },
@@ -16,6 +16,7 @@ const Config = {
   // Model registry and paths (will be populated from global_registry.json)
   models: {
     registry: 'models/global_registry.json',
+    registryGithub: 'models/global_registry_github.json', // GitHub Pages specific registry
     registryData: null, // Will be loaded dynamically
     wakeword: {
       default: 'hey-jarvis',
@@ -178,7 +179,14 @@ const Config = {
       // First, try to load the manifest for faster initialization
       const manifest = await this.loadManifest();
       
-      const response = await fetch(this.models.registry);
+      // Detect if we're running on GitHub Pages and select appropriate registry
+      const isGitHubPages = window.location.hostname.includes('github') || 
+                           window.location.hostname.includes('github.io');
+      const registryPath = isGitHubPages ? this.models.registryGithub : this.models.registry;
+      
+      console.log(`Loading registry: ${registryPath} (GitHub Pages: ${isGitHubPages})`);
+      
+      const response = await fetch(registryPath);
       if (!response.ok) {
         throw new Error(`Failed to load registry: ${response.status}`);
       }
@@ -397,33 +405,53 @@ const Config = {
               break;
             }
             
-            // 添加標準版本（如果存在）
-            if (modelCheck.hasStandard) {
+            // 檢測是否在 GitHub Pages 環境
+            const isGitHubPages = window.location.hostname.includes('github') || 
+                                 window.location.hostname.includes('github.io');
+            
+            // 如果在 GitHub Pages 上，強制只使用量化版本
+            if (isGitHubPages && model.specs?.quantized) {
+              // GitHub Pages 只添加量化版本，並且不添加 '-quantized' 後綴
               this.models.whisper.available[model.id] = {
                 path: fullPath,
                 name: model.name,
                 size: model.specs?.size_mb || 0,
                 multilingual: model.features?.multilingual || false,
                 description: model.description,
-                quantized: true, // 默認標準模型為量化版本
-                files: model.files
-              };
-              console.log(`Added standard Whisper model: ${model.id}`);
-            }
-            
-            // 添加量化版本（如果存在）
-            if (modelCheck.hasQuantized) {
-              const quantizedId = model.id + '-quantized';
-              this.models.whisper.available[quantizedId] = {
-                path: fullPath,
-                name: model.name + ' (Quantized)',
-                size: Math.round((model.specs?.size_mb || 0) * 0.25), // 量化版本通常較小
-                multilingual: model.features?.multilingual || false,
-                description: model.description + ' - 量化版本，速度更快但準確度略低',
                 quantized: true,
                 files: model.files
               };
-              console.log(`Added quantized Whisper model: ${quantizedId}`);
+              console.log(`Added quantized Whisper model for GitHub Pages: ${model.id}`);
+            } else {
+              // 非 GitHub Pages 環境的原始邏輯
+              // 添加標準版本（如果存在）
+              if (modelCheck.hasStandard) {
+                this.models.whisper.available[model.id] = {
+                  path: fullPath,
+                  name: model.name,
+                  size: model.specs?.size_mb || 0,
+                  multilingual: model.features?.multilingual || false,
+                  description: model.description,
+                  quantized: false,
+                  files: model.files
+                };
+                console.log(`Added standard Whisper model: ${model.id}`);
+              }
+              
+              // 添加量化版本（如果存在）
+              if (modelCheck.hasQuantized) {
+                const quantizedId = model.id + '-quantized';
+                this.models.whisper.available[quantizedId] = {
+                  path: fullPath,
+                  name: model.name + ' (Quantized)',
+                  size: Math.round((model.specs?.size_mb || 0) * 0.25), // 量化版本通常較小
+                  multilingual: model.features?.multilingual || false,
+                  description: model.description + ' - 量化版本，速度更快但準確度略低',
+                  quantized: true,
+                  files: model.files
+                };
+                console.log(`Added quantized Whisper model: ${quantizedId}`);
+              }
             }
           }
           break;
