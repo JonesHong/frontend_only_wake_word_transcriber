@@ -405,7 +405,7 @@ const Config = {
                 size: model.specs?.size_mb || 0,
                 multilingual: model.features?.multilingual || false,
                 description: model.description,
-                quantized: false,
+                quantized: true, // 默認標準模型為量化版本
                 files: model.files
               };
               console.log(`Added standard Whisper model: ${model.id}`);
