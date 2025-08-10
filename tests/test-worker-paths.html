@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Worker 路徑測試</title>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #1a1a1a;
+            color: #e0e0e0;
+        }
+        h1 { color: #4CAF50; }
+        .test-section {
+            background: #2a2a2a;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        .test-item {
+            margin: 10px 0;
+            padding: 10px;
+            background: #333;
+            border-radius: 4px;
+        }
+        .success { color: #4CAF50; }
+        .error { color: #f44336; }
+        .info { color: #2196F3; }
+        .path-display {
+            font-family: monospace;
+            background: #1a1a1a;
+            padding: 5px;
+            border-radius: 3px;
+            margin: 5px 0;
+        }
+        button {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover { background: #45a049; }
+    </style>
+</head>
+<body>
+    <h1>Worker 路徑測試</h1>
+    
+    <div class="test-section">
+        <h2>當前環境資訊</h2>
+        <div class="test-item">
+            <div>Location Href: <span class="path-display" id="locationHref"></span></div>
+            <div>Location Pathname: <span class="path-display" id="locationPathname"></span></div>
+            <div>Base Path: <span class="path-display" id="basePath"></span></div>
+            <div>Worker Path: <span class="path-display" id="workerPath"></span></div>
+            <div>Models Path: <span class="path-display" id="modelsPath"></span></div>
+        </div>
+    </div>
+    
+    <div class="test-section">
+        <h2>Worker 載入測試</h2>
+        <button onclick="testWhisperWorker()">測試 Whisper Worker</button>
+        <button onclick="testWorkerManager()">測試 Worker Manager</button>
+        <div id="testResults"></div>
+    </div>
+    
+    <script type="module">
+        // 顯示環境資訊
+        const basePath = window.location.pathname.replace(/\/[^\/]*$/, '');
+        document.getElementById('locationHref').textContent = window.location.href;
+        document.getElementById('locationPathname').textContent = window.location.pathname;
+        document.getElementById('basePath').textContent = basePath;
+        document.getElementById('workerPath').textContent = basePath + '/js/workers/whisper.worker.js';
+        document.getElementById('modelsPath').textContent = basePath + '/models/';
+        
+        window.testWhisperWorker = async function() {
+            const resultsDiv = document.getElementById('testResults');
+            resultsDiv.innerHTML = '<div class="test-item">測試 Whisper Worker...</div>';
+            
+            try {
+                // Import WhisperEngine
+                const module = await import('../js/modules/engines/whisper-engine.js');
+                const WhisperEngine = module.WhisperEngine;
+                
+                resultsDiv.innerHTML += '<div class="test-item info">WhisperEngine 模組載入成功</div>';
+                
+                // 創建實例
+                const engine = new WhisperEngine();
+                resultsDiv.innerHTML += '<div class="test-item info">WhisperEngine 實例創建成功</div>';
+                
+                // 初始化（這會創建 Worker）
+                await engine.initialize();
+                resultsDiv.innerHTML += '<div class="test-item success">✓ Whisper Worker 載入成功！</div>';
+                
+                // 清理
+                engine.cleanup();
+                
+            } catch (error) {
+                resultsDiv.innerHTML += `<div class="test-item error">✗ 錯誤: ${error.message}</div>`;
+                console.error('Test error:', error);
+            }
+        };
+        
+        window.testWorkerManager = async function() {
+            const resultsDiv = document.getElementById('testResults');
+            resultsDiv.innerHTML = '<div class="test-item">測試 Worker Manager...</div>';
+            
+            try {
+                // Import WorkerManager
+                const module = await import('../js/modules/worker-manager.js');
+                const WorkerManager = module.WorkerManager;
+                
+                resultsDiv.innerHTML += '<div class="test-item info">WorkerManager 模組載入成功</div>';
+                
+                // 創建實例
+                const manager = new WorkerManager();
+                await manager.initialize();
+                resultsDiv.innerHTML += '<div class="test-item info">WorkerManager 初始化成功</div>';
+                
+                // 測試創建一個簡單的 Worker
+                const testWorkerCode = `
+                    self.onmessage = function(e) {
+                        self.postMessage({ 
+                            received: e.data,
+                            workerPath: self.location.pathname
+                        });
+                    }
+                `;
+                
+                // 創建測試 Worker
+                const blob = new Blob([testWorkerCode], { type: 'application/javascript' });
+                const workerUrl = URL.createObjectURL(blob);
+                const testWorker = new Worker(workerUrl);
+                
+                // 測試通訊
+                const response = await new Promise((resolve, reject) => {
+                    testWorker.onmessage = (e) => resolve(e.data);
+                    testWorker.onerror = reject;
+                    testWorker.postMessage('test');
+                    setTimeout(() => reject(new Error('Worker timeout')), 5000);
+                });
+                
+                resultsDiv.innerHTML += `<div class="test-item success">✓ Worker 通訊成功！</div>`;
+                resultsDiv.innerHTML += `<div class="test-item info">Worker 路徑: ${response.workerPath}</div>`;
+                
+                // 清理
+                testWorker.terminate();
+                URL.revokeObjectURL(workerUrl);
+                
+            } catch (error) {
+                resultsDiv.innerHTML += `<div class="test-item error">✗ 錯誤: ${error.message}</div>`;
+                console.error('Test error:', error);
+            }
+        };
+    </script>
+</body>
+</html>

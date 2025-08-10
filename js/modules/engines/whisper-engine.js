@@ -84,7 +84,10 @@ export class WhisperEngine extends SpeechRecognitionEngine {
      */
     async createWorker() {
         try {
-            this.worker = new Worker('/js/workers/whisper.worker.js', { type: 'module' });
+            // 使用相對於當前頁面的路徑，支援 GitHub Pages 子目錄
+            const basePath = window.location.pathname.replace(/\/[^\/]*$/, '');
+            const workerPath = basePath + '/js/workers/whisper.worker.js';
+            this.worker = new Worker(workerPath, { type: 'module' });
             
             // 用於追蹤待處理的訊息回應
             this.pendingMessages = new Map();

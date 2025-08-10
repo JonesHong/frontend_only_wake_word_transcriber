@@ -11,7 +11,9 @@ import { pipeline, env } from 'https://cdn.jsdelivr.net/npm/@xenova/transformers
 // 預設為本地模型，可通過配置更改
 env.allowLocalModels = true;  // 使用本地模型
 env.allowRemoteModels = false;  // 預設禁用遠端模型
-env.localURL = '/models/';  // 本地模型的基礎路徑
+// 使用相對於當前頁面的路徑，支援 GitHub Pages 子目錄
+const basePath = self.location.pathname.replace(/\/[^\/]*\.worker\.js$/, '').replace(/\/js\/workers$/, '');
+env.localURL = basePath + '/models/';  // 本地模型的基礎路徑
 // 設置 WASM 路徑 (v2 版本不需要 backends 配置)
 // env.backends.onnx.wasm.wasmPaths = 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2/dist/';
 

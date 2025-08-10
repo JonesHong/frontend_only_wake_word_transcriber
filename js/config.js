@@ -155,9 +155,29 @@ const Config = {
     bypassPermissions: false
   },
 
+  // Load model manifest (lists available models to avoid checking each file)
+  async loadManifest() {
+    try {
+      const response = await fetch('models/manifest.json');
+      if (!response.ok) {
+        console.warn('Manifest file not found, will check models individually');
+        return null;
+      }
+      const manifest = await response.json();
+      console.log('Model manifest loaded:', manifest.version);
+      return manifest;
+    } catch (error) {
+      console.warn('Failed to load model manifest:', error);
+      return null;
+    }
+  },
+
   // Load registry from JSON file
   async loadRegistry() {
     try {
+      // First, try to load the manifest for faster initialization
+      const manifest = await this.loadManifest();
+      
       const response = await fetch(this.models.registry);
       if (!response.ok) {
         throw new Error(`Failed to load registry: ${response.status}`);
@@ -167,7 +187,7 @@ const Config = {
       this.models.registryData = registry;
       
       // Process and populate model configurations
-      await this.processRegistry(registry);
+      await this.processRegistry(registry, manifest);
       
       if (this.development.logModelLoading) {
         console.log('Model registry loaded successfully', registry);
@@ -202,7 +222,7 @@ const Config = {
     }
   },
 
-  // Check if model directory has required files
+  // Check if model directory has required files (with parallel checking)
   async checkWhisperModelExists(modelPath, files) {
     // Check both quantized and standard versions
     const quantizedFiles = [
@@ -215,27 +235,45 @@ const Config = {
       'onnx/decoder_model_merged.onnx'
     ];
     
-    // Check quantized versions
-    let hasQuantized = true;
-    for (const file of quantizedFiles) {
-      const fullPath = `${modelPath}/${file}`;
-      const exists = await this.checkModelExists(fullPath);
-      if (!exists) {
-        hasQuantized = false;
-        break;
-      }
-    }
+    // Parallel check for all files
+    const checkPromises = [];
+    const fileMap = new Map();
     
-    // Check standard versions
-    let hasStandard = true;
-    for (const file of standardFiles) {
+    // Add quantized file checks
+    quantizedFiles.forEach(file => {
       const fullPath = `${modelPath}/${file}`;
-      const exists = await this.checkModelExists(fullPath);
+      const promise = this.checkModelExists(fullPath);
+      checkPromises.push(promise);
+      fileMap.set(promise, { type: 'quantized', file });
+    });
+    
+    // Add standard file checks
+    standardFiles.forEach(file => {
+      const fullPath = `${modelPath}/${file}`;
+      const promise = this.checkModelExists(fullPath);
+      checkPromises.push(promise);
+      fileMap.set(promise, { type: 'standard', file });
+    });
+    
+    // Wait for all checks to complete in parallel
+    const results = await Promise.all(checkPromises);
+    
+    // Process results
+    let hasQuantized = true;
+    let hasStandard = true;
+    
+    results.forEach((exists, index) => {
+      const promise = checkPromises[index];
+      const fileInfo = fileMap.get(promise);
+      
       if (!exists) {
-        hasStandard = false;
-        break;
+        if (fileInfo.type === 'quantized') {
+          hasQuantized = false;
+        } else {
+          hasStandard = false;
+        }
       }
-    }
+    });
     
     // Return both states
     return { 
@@ -246,12 +284,20 @@ const Config = {
   },
 
   // Process registry data and populate model configurations
-  async processRegistry(registry) {
+  async processRegistry(registry, manifest = null) {
     if (!registry || !registry.models) return;
 
     // Clear existing configurations
     this.models.wakeword.available = {};
     this.models.whisper.available = {};
+
+    // Create a quick lookup map from manifest if available
+    const manifestModels = {};
+    if (manifest && manifest.models && manifest.models.whisper) {
+      for (const [modelId, modelData] of Object.entries(manifest.models.whisper)) {
+        manifestModels[modelId] = modelData;
+      }
+    }
 
     // Process each model in the registry
     for (const model of registry.models) {
@@ -330,8 +376,21 @@ const Config = {
         case 'asr':
           // Whisper model configuration
           if (model.id.startsWith('whisper')) {
-            // 檢查模型檔案是否存在
-            const modelCheck = await this.checkWhisperModelExists(fullPath, model.files);
+            let modelCheck = { hasStandard: false, hasQuantized: false, exists: false };
+            
+            // Use manifest data if available (much faster)
+            if (manifestModels[model.id]) {
+              const manifestModel = manifestModels[model.id];
+              // Assume models in manifest exist
+              modelCheck.hasStandard = !!manifestModel.files?.standard;
+              modelCheck.hasQuantized = !!manifestModel.files?.quantized;
+              modelCheck.exists = modelCheck.hasStandard || modelCheck.hasQuantized;
+              console.log(`Using manifest for ${model.id}: standard=${modelCheck.hasStandard}, quantized=${modelCheck.hasQuantized}`);
+            } else {
+              // Fallback to checking files (slower)
+              console.log(`No manifest entry for ${model.id}, checking files...`);
+              modelCheck = await this.checkWhisperModelExists(fullPath, model.files);
+            }
             
             if (!modelCheck.exists) {
               console.log(`Whisper model ${model.id} not found locally, skipping`);

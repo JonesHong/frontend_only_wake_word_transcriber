@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>模型載入效能測試</title>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #1a1a1a;
+            color: #e0e0e0;
+        }
+        h1 { color: #4CAF50; }
+        .test-section {
+            background: #2a2a2a;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        .metric {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px 0;
+            border-bottom: 1px solid #3a3a3a;
+        }
+        .metric:last-child { border-bottom: none; }
+        .label { font-weight: bold; color: #9e9e9e; }
+        .value { color: #4CAF50; }
+        .error { color: #f44336; }
+        button {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px;
+        }
+        button:hover { background: #45a049; }
+        button:disabled {
+            background: #555;
+            cursor: not-allowed;
+        }
+        #log {
+            background: #1a1a1a;
+            padding: 15px;
+            border-radius: 4px;
+            max-height: 400px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 12px;
+            white-space: pre-wrap;
+        }
+        .log-entry { margin: 2px 0; }
+        .log-time { color: #666; }
+        .log-info { color: #4CAF50; }
+        .log-warn { color: #FFC107; }
+        .log-error { color: #f44336; }
+    </style>
+</head>
+<body>
+    <h1>模型載入效能測試</h1>
+    
+    <div class="test-section">
+        <h2>測試控制</h2>
+        <button id="testWithManifest" onclick="runTest(true)">測試優化版（使用 Manifest）</button>
+        <button id="testWithoutManifest" onclick="runTest(false)">測試原始版（逐一檢查）</button>
+        <button onclick="clearResults()">清除結果</button>
+    </div>
+    
+    <div class="test-section">
+        <h2>測試結果</h2>
+        <div id="results">
+            <div class="metric">
+                <span class="label">狀態：</span>
+                <span class="value" id="status">等待測試...</span>
+            </div>
+            <div class="metric">
+                <span class="label">Manifest 載入時間：</span>
+                <span class="value" id="manifestTime">-</span>
+            </div>
+            <div class="metric">
+                <span class="label">Registry 載入時間：</span>
+                <span class="value" id="registryTime">-</span>
+            </div>
+            <div class="metric">
+                <span class="label">模型檢查時間：</span>
+                <span class="value" id="checkTime">-</span>
+            </div>
+            <div class="metric">
+                <span class="label">總載入時間：</span>
+                <span class="value" id="totalTime">-</span>
+            </div>
+            <div class="metric">
+                <span class="label">HTTP 請求數量：</span>
+                <span class="value" id="requestCount">-</span>
+            </div>
+            <div class="metric">
+                <span class="label">404 錯誤數量：</span>
+                <span class="value" id="errorCount">-</span>
+            </div>
+            <div class="metric">
+                <span class="label">發現的模型數量：</span>
+                <span class="value" id="modelCount">-</span>
+            </div>
+        </div>
+    </div>
+    
+    <div class="test-section">
+        <h2>詳細日誌</h2>
+        <div id="log"></div>
+    </div>
+    
+    <script type="module">
+        // Import config module
+        import { config } from '../js/config.js';
+        
+        // Performance tracking
+        let httpRequestCount = 0;
+        let http404Count = 0;
+        let logEntries = [];
+        
+        // Override fetch to track requests
+        const originalFetch = window.fetch;
+        window.fetch = async function(...args) {
+            httpRequestCount++;
+            const url = args[0];
+            log(`HTTP ${args[1]?.method || 'GET'}: ${url}`, 'info');
+            
+            try {
+                const response = await originalFetch.apply(this, args);
+                if (!response.ok && response.status === 404) {
+                    http404Count++;
+                    log(`404 Error: ${url}`, 'error');
+                }
+                return response;
+            } catch (error) {
+                log(`Network Error: ${url} - ${error.message}`, 'error');
+                throw error;
+            }
+        };
+        
+        function log(message, level = 'info') {
+            const timestamp = new Date().toISOString().split('T')[1].split('.')[0];
+            const entry = `<span class="log-time">${timestamp}</span> <span class="log-${level}">${message}</span>`;
+            logEntries.push(entry);
+            document.getElementById('log').innerHTML = logEntries.join('\n');
+            document.getElementById('log').scrollTop = document.getElementById('log').scrollHeight;
+        }
+        
+        window.runTest = async function(useManifest) {
+            // Reset counters
+            httpRequestCount = 0;
+            http404Count = 0;
+            logEntries = [];
+            
+            // Clear previous results
+            document.getElementById('status').textContent = '測試中...';
+            document.getElementById('status').className = 'value';
+            document.getElementById('testWithManifest').disabled = true;
+            document.getElementById('testWithoutManifest').disabled = true;
+            
+            const startTime = performance.now();
+            let manifestTime = 0;
+            let registryTime = 0;
+            let checkTime = 0;
+            
+            try {
+                log(`開始測試 (${useManifest ? '使用 Manifest' : '不使用 Manifest'})`, 'info');
+                
+                // Temporarily modify config to control manifest usage
+                const originalLoadManifest = config.loadManifest;
+                if (!useManifest) {
+                    config.loadManifest = async () => {
+                        log('跳過 Manifest 載入（測試模式）', 'warn');
+                        return null;
+                    };
+                }
+                
+                // Test manifest loading
+                if (useManifest) {
+                    const manifestStart = performance.now();
+                    const manifest = await config.loadManifest();
+                    manifestTime = performance.now() - manifestStart;
+                    log(`Manifest 載入完成: ${manifestTime.toFixed(2)}ms`, 'info');
+                }
+                
+                // Test registry loading
+                const registryStart = performance.now();
+                const registryResponse = await fetch(config.models.registry);
+                const registry = await registryResponse.json();
+                registryTime = performance.now() - registryStart;
+                log(`Registry 載入完成: ${registryTime.toFixed(2)}ms`, 'info');
+                
+                // Test model processing
+                const checkStart = performance.now();
+                await config.processRegistry(registry, useManifest ? await config.loadManifest() : null);
+                checkTime = performance.now() - checkStart;
+                log(`模型處理完成: ${checkTime.toFixed(2)}ms`, 'info');
+                
+                // Restore original function
+                if (!useManifest) {
+                    config.loadManifest = originalLoadManifest;
+                }
+                
+                const totalTime = performance.now() - startTime;
+                
+                // Update results
+                document.getElementById('manifestTime').textContent = useManifest ? `${manifestTime.toFixed(2)} ms` : 'N/A';
+                document.getElementById('registryTime').textContent = `${registryTime.toFixed(2)} ms`;
+                document.getElementById('checkTime').textContent = `${checkTime.toFixed(2)} ms`;
+                document.getElementById('totalTime').textContent = `${totalTime.toFixed(2)} ms`;
+                document.getElementById('requestCount').textContent = httpRequestCount;
+                document.getElementById('errorCount').textContent = http404Count;
+                document.getElementById('modelCount').textContent = Object.keys(config.models.whisper.available).length;
+                
+                document.getElementById('status').textContent = '測試完成';
+                document.getElementById('status').className = 'value';
+                
+                log(`測試完成！總時間: ${totalTime.toFixed(2)}ms, HTTP請求: ${httpRequestCount}, 404錯誤: ${http404Count}`, 'info');
+                
+            } catch (error) {
+                console.error('Test error:', error);
+                document.getElementById('status').textContent = `錯誤: ${error.message}`;
+                document.getElementById('status').className = 'error';
+                log(`測試錯誤: ${error.message}`, 'error');
+            } finally {
+                document.getElementById('testWithManifest').disabled = false;
+                document.getElementById('testWithoutManifest').disabled = false;
+            }
+        };
+        
+        window.clearResults = function() {
+            document.getElementById('status').textContent = '等待測試...';
+            document.getElementById('manifestTime').textContent = '-';
+            document.getElementById('registryTime').textContent = '-';
+            document.getElementById('checkTime').textContent = '-';
+            document.getElementById('totalTime').textContent = '-';
+            document.getElementById('requestCount').textContent = '-';
+            document.getElementById('errorCount').textContent = '-';
+            document.getElementById('modelCount').textContent = '-';
+            document.getElementById('log').innerHTML = '';
+            logEntries = [];
+        };
+    </script>
+</body>
+</html>

@@ -169,7 +169,9 @@ export class WorkerManager {
 
         try {
             let worker;
-            const workerPath = `/js/workers/${type}.worker.js`;
+            // 使用相對於當前頁面的路徑，支援 GitHub Pages 子目錄
+            const basePath = window.location.pathname.replace(/\/[^\/]*$/, '');
+            const workerPath = `${basePath}/js/workers/${type}.worker.js`;
             
             // 嘗試創建 Module Worker
             if (this.capabilities.moduleWorker && options.module !== false) {
