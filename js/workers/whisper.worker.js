@@ -228,6 +228,7 @@ async function handleLoadModel(data) {
         // 遠端模型：從 Hugging Face 載入
         env.allowRemoteModels = true;
         env.allowLocalModels = false;
+        env.useBrowserCache = true;  // 啟用瀏覽器快取（重要！）
         
         // 如果是本地路徑格式，轉換為 HuggingFace ID
         if (model.includes('huggingface/')) {
@@ -237,7 +238,13 @@ async function handleLoadModel(data) {
             if (parts.length > 1) {
                 model = parts[1];
             }
+        } else if (model.startsWith('models/') || model.startsWith('/models/')) {
+            // 處理其他本地路徑格式
+            model = model.replace(/^\/?(models\/)?/, '');
         }
+        
+        // 對於遠端模型，不需要額外的路徑處理
+        // transformers.js 期望直接的 HuggingFace ID（例如：Xenova/whisper-base）
         console.log('[WhisperWorker] Loading remote model from Hugging Face:', model);
         
         // 檢測是否離線
@@ -248,24 +255,25 @@ async function handleLoadModel(data) {
         // 本地模型：從本地檔案載入
         env.allowRemoteModels = false;
         env.allowLocalModels = true;
+        env.useBrowserCache = false;  // 本地模型不需要瀏覽器快取
         console.log('[WhisperWorker] Loading local model:', model);
-    }
-    
-    // 確保路徑格式正確
-    // Transformers.js 會將 env.localURL + model 作為完整路徑
-    // env.localURL = '/models/'，所以我們只需要提供相對路徑
-    if (model.startsWith('models/')) {
-        // 移除 'models/' 前綴，因為 env.localURL 已經包含了
-        model = model.substring('models/'.length);
-    } else if (model.startsWith('/models/')) {
-        // 移除 '/models/' 前綴
-        model = model.substring('/models/'.length);
-    } else if (!model.includes('huggingface/') && model.includes('/')) {
-        // 如果是 HuggingFace ID (例如 Xenova/whisper-base)，加上 huggingface 前綴
-        model = 'huggingface/' + model;
-    } else if (!model.includes('/')) {
-        // 如果只是模型名稱，假設是 HuggingFace ID
-        model = 'huggingface/Xenova/' + model;
+        
+        // 只對本地模型進行路徑處理
+        // Transformers.js 會將 env.localURL + model 作為完整路徑
+        // env.localURL = '/models/'，所以我們只需要提供相對路徑
+        if (model.startsWith('models/')) {
+            // 移除 'models/' 前綴，因為 env.localURL 已經包含了
+            model = model.substring('models/'.length);
+        } else if (model.startsWith('/models/')) {
+            // 移除 '/models/' 前綴
+            model = model.substring('/models/'.length);
+        } else if (!model.includes('huggingface/') && model.includes('/')) {
+            // 如果是 HuggingFace ID 格式但用於本地，加上 huggingface 前綴
+            model = 'huggingface/' + model;
+        } else if (!model.includes('/')) {
+            // 如果只是模型名稱，假設是本地的 HuggingFace 結構
+            model = 'huggingface/Xenova/' + model;
+        }
     }
     
     console.log('[WhisperWorker] Loading model from path:', model, 'quantized:', quantized);
@@ -292,13 +300,38 @@ async function handleLoadModel(data) {
         
         self.postMessage({
             type: 'modelLoaded',
-            model: model
+            model: model,
+            source: modelSource,
+            cached: modelSource === 'remote' ? 'Check IndexedDB for cache' : 'N/A'
         });
         
-        console.log('[WhisperWorker] Model loaded successfully');
+        console.log('[WhisperWorker] Model loaded successfully:', {
+            model: model,
+            source: modelSource,
+            quantized: quantized
+        });
     } catch (error) {
-        console.error('[WhisperWorker] Failed to load model:', error);
-        throw error;
+        console.error('[WhisperWorker] Failed to load model:', {
+            error: error.message,
+            model: model,
+            source: modelSource,
+            online: navigator.onLine,
+            stack: error.stack
+        });
+        
+        // 提供更詳細的錯誤訊息
+        let detailedError = error.message;
+        if (modelSource === 'remote') {
+            if (!navigator.onLine) {
+                detailedError = '無法載入遠端模型：您目前處於離線狀態。請連接網路或切換到本地模型。';
+            } else if (error.message.includes('404') || error.message.includes('Not Found')) {
+                detailedError = `找不到模型 "${model}"。請確認模型名稱正確，或嘗試其他模型。`;
+            } else if (error.message.includes('CORS') || error.message.includes('Failed to fetch')) {
+                detailedError = '網路請求失敗。這可能是 CORS 問題或網路連接問題。請稍後再試。';
+            }
+        }
+        
+        throw new Error(detailedError);
     }
 }
 

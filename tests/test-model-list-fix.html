@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>測試模型列表修復</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .test-section {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .status {
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        .success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        pre {
+            background: #f4f4f4;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔧 測試模型列表修復</h1>
+    
+    <div class="test-section">
+        <h2>測試步驟</h2>
+        <ol>
+            <li>載入 Config.js</li>
+            <li>初始化 Config（載入 registry）</li>
+            <li>檢查 whisper.available 中的模型</li>
+            <li>模擬 DOM 準備就緒</li>
+            <li>測試 initializeWhisperModelList 函數</li>
+        </ol>
+    </div>
+
+    <div class="test-section">
+        <h2>測試結果</h2>
+        <div id="results"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>模擬的 Whisper 模型列表容器</h2>
+        <div id="whisperModelList" style="border: 1px solid #ddd; padding: 10px; min-height: 100px; background: #f9f9f9;">
+            <p style="color: #999;">等待初始化...</p>
+        </div>
+    </div>
+
+    <script>
+        const resultsDiv = document.getElementById('results');
+        
+        function log(message, type = 'info') {
+            const div = document.createElement('div');
+            div.className = `status ${type}`;
+            div.innerHTML = message;
+            resultsDiv.appendChild(div);
+            console.log(message);
+        }
+        
+        async function runTest() {
+            try {
+                // 步驟 1: 載入 Config.js
+                log('步驟 1: 載入 Config.js...', 'info');
+                await loadScript('js/config.js');
+                
+                if (!window.Config) {
+                    throw new Error('Config 物件未載入');
+                }
+                log('✓ Config.js 載入成功', 'success');
+                
+                // 步驟 2: 初始化 Config
+                log('步驟 2: 初始化 Config（載入 registry）...', 'info');
+                await window.Config.init();
+                log('✓ Config 初始化完成', 'success');
+                
+                // 步驟 3: 檢查可用的 Whisper 模型
+                log('步驟 3: 檢查 whisper.available 中的模型...', 'info');
+                const whisperModels = window.Config.models.whisper.available;
+                const modelCount = Object.keys(whisperModels).length;
+                
+                if (modelCount === 0) {
+                    log('⚠️ 沒有找到任何 Whisper 模型', 'error');
+                } else {
+                    log(`✓ 找到 ${modelCount} 個 Whisper 模型：`, 'success');
+                    const modelList = Object.entries(whisperModels).map(([id, model]) => 
+                        `- ${id}: ${model.name} (${model.size}MB, ${model.quantized ? '量化版' : '標準版'})`
+                    ).join('<br>');
+                    log(modelList, 'info');
+                }
+                
+                // 步驟 4: 模擬 main.js 的 initializeWhisperModelList 函數
+                log('步驟 4: 測試 initializeWhisperModelList 函數...', 'info');
+                
+                // 簡化版的 initializeWhisperModelList
+                function initializeWhisperModelList() {
+                    const modelListContainer = document.getElementById('whisperModelList');
+                    if (!modelListContainer || !window.Config) {
+                        log('⚠️ 容器或 Config 不存在', 'error');
+                        return;
+                    }
+                    
+                    // 清空現有內容
+                    modelListContainer.innerHTML = '';
+                    
+                    // 獲取可用的 Whisper 模型
+                    const whisperModels = window.Config.models.whisper.available || {};
+                    
+                    // 如果沒有模型，顯示提示
+                    if (Object.keys(whisperModels).length === 0) {
+                        modelListContainer.innerHTML = '<p class="text-sm text-gray-500">沒有可用的模型</p>';
+                        return;
+                    }
+                    
+                    // 分組模型
+                    const standardModels = [];
+                    const quantizedModels = [];
+                    
+                    Object.entries(whisperModels).forEach(([id, model]) => {
+                        if (model.quantized) {
+                            quantizedModels.push({ id, ...model });
+                        } else {
+                            standardModels.push({ id, ...model });
+                        }
+                    });
+                    
+                    // 顯示標準模型
+                    if (standardModels.length > 0) {
+                        const group = document.createElement('div');
+                        group.innerHTML = '<h4>標準模型：</h4>';
+                        standardModels.forEach(model => {
+                            const item = document.createElement('div');
+                            item.innerHTML = `• ${model.name} (${model.size}MB) - ID: ${model.id}`;
+                            group.appendChild(item);
+                        });
+                        modelListContainer.appendChild(group);
+                    }
+                    
+                    // 顯示量化模型
+                    if (quantizedModels.length > 0) {
+                        const group = document.createElement('div');
+                        group.innerHTML = '<h4>量化模型（更快但準確度略低）：</h4>';
+                        quantizedModels.forEach(model => {
+                            const item = document.createElement('div');
+                            item.innerHTML = `• ${model.name} (${model.size}MB) - ID: ${model.id}`;
+                            group.appendChild(item);
+                        });
+                        modelListContainer.appendChild(group);
+                    }
+                    
+                    log(`✓ 模型列表已填充（${standardModels.length} 個標準模型，${quantizedModels.length} 個量化模型）`, 'success');
+                }
+                
+                // 執行函數
+                initializeWhisperModelList();
+                
+                // 步驟 5: 檢查 DOM 內容
+                log('步驟 5: 檢查 DOM 內容...', 'info');
+                const container = document.getElementById('whisperModelList');
+                if (container && container.children.length > 0) {
+                    log('✓ 模型列表容器已成功填充內容', 'success');
+                } else {
+                    log('⚠️ 模型列表容器為空', 'error');
+                }
+                
+                log('<strong>測試完成！</strong>', 'success');
+                
+            } catch (error) {
+                log(`錯誤: ${error.message}`, 'error');
+                console.error('測試失敗:', error);
+            }
+        }
+        
+        function loadScript(src) {
+            return new Promise((resolve, reject) => {
+                const script = document.createElement('script');
+                script.src = src;
+                script.onload = resolve;
+                script.onerror = reject;
+                document.head.appendChild(script);
+            });
+        }
+        
+        // 執行測試
+        window.addEventListener('DOMContentLoaded', runTest);
+    </script>
+</body>
+</html>

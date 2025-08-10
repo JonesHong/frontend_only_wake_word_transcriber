@@ -1338,6 +1338,8 @@ class VoiceAssistantApp {
             if (checkedEngine) {
                 this.handleEngineChange(checkedEngine.value);
             }
+            // 確保模型列表在引擎切換後再次初始化
+            this.initializeWhisperModelList();
         }, 100);
         
         // 監聽網路狀態變化
@@ -1387,6 +1389,10 @@ class VoiceAssistantApp {
         
         if (whisperModelSelection) {
             whisperModelSelection.style.display = mode === 'webspeech' ? 'none' : 'block';
+            // 當切換到 Whisper 時，確保模型列表已初始化
+            if (mode === 'whisper') {
+                this.initializeWhisperModelList();
+            }
         }
         
         // 只在選擇 Whisper 時顯示輸出模式和模型來源選項
