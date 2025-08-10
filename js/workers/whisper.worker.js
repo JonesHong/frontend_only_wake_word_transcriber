@@ -210,10 +210,16 @@ self.onmessage = async (event) => {
  * 初始化 Worker
  */
 async function handleInitialize(data) {
-    const { language = 'zh', task = 'transcribe', whisperOutputMode = 'streaming', basePath } = data.config || {};
+    const { language = 'zh', task = 'transcribe', whisperOutputMode = 'streaming', basePath, quantized = false } = data.config || {};
     currentLanguage = normalizeLanguage(language);
     currentTask = task;
     outputMode = whisperOutputMode;
+    
+    // 設置預設的量化標記（用於初始化時的檔案載入）
+    if (quantized) {
+        AutomaticSpeechRecognitionPipelineFactory.quantized = quantized;
+        console.log('[WhisperWorker] Default quantized mode set to:', quantized);
+    }
     
     // 如果尚未初始化 Transformers.js，現在初始化
     if (!transformersInitialized) {
@@ -244,6 +250,31 @@ async function handleInitialize(data) {
         env.allowRemoteModels = false;  // 預設禁用遠端模型
         env.localModelPath = finalBasePath;  // 設定本地模型路徑
         env.localURL = finalBasePath;  // 設定應用程式根目錄（不包含 /models/）
+        
+        // 覆寫檔案載入邏輯以支援量化模型
+        // 儲存原始的 getFile 函數
+        const originalGetFile = env.getFile || ((url) => fetch(url).then(r => r.arrayBuffer()));
+        
+        // 自定義 getFile 函數
+        env.getFile = async (url) => {
+            // 檢查是否需要載入量化版本
+            if (AutomaticSpeechRecognitionPipelineFactory.quantized) {
+                // 只處理 ONNX 模型檔案
+                if (url.includes('/onnx/') && url.endsWith('.onnx')) {
+                    // 修改 URL 以載入量化版本
+                    if (url.includes('encoder_model.onnx')) {
+                        url = url.replace('encoder_model.onnx', 'encoder_model_quantized.onnx');
+                        console.log('[WhisperWorker] Loading quantized encoder:', url);
+                    } else if (url.includes('decoder_model_merged.onnx')) {
+                        url = url.replace('decoder_model_merged.onnx', 'decoder_model_merged_quantized.onnx');
+                        console.log('[WhisperWorker] Loading quantized decoder:', url);
+                    }
+                }
+            }
+            
+            // 使用原始或修改後的 URL 載入檔案
+            return originalGetFile(url);
+        };
         
         transformersInitialized = true;
         console.log('[WhisperWorker] Transformers.js initialized with env.localURL:', env.localURL);

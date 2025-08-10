@@ -33,6 +33,7 @@ const Config = {
     },
     whisper: {
       default: 'whisper-base',
+      quantized: true, // Default to standard models
       available: {} // Will be populated from registry
     }
   },
@@ -156,28 +157,9 @@ const Config = {
     bypassPermissions: false
   },
 
-  // Load model manifest (lists available models to avoid checking each file)
-  async loadManifest() {
-    try {
-      const response = await fetch('models/manifest.json');
-      if (!response.ok) {
-        console.warn('Manifest file not found, will check models individually');
-        return null;
-      }
-      const manifest = await response.json();
-      console.log('Model manifest loaded:', manifest.version);
-      return manifest;
-    } catch (error) {
-      console.warn('Failed to load model manifest:', error);
-      return null;
-    }
-  },
-
   // Load registry from JSON file
   async loadRegistry() {
     try {
-      // First, try to load the manifest for faster initialization
-      const manifest = await this.loadManifest();
       
       // Detect if we're running on GitHub Pages and select appropriate registry
       const isGitHubPages = window.location.hostname.includes('github') || 
@@ -195,7 +177,7 @@ const Config = {
       this.models.registryData = registry;
       
       // Process and populate model configurations
-      await this.processRegistry(registry, manifest);
+      await this.processRegistry(registry);
       
       if (this.development.logModelLoading) {
         console.log('Model registry loaded successfully', registry);
@@ -292,20 +274,12 @@ const Config = {
   },
 
   // Process registry data and populate model configurations
-  async processRegistry(registry, manifest = null) {
+  async processRegistry(registry) {
     if (!registry || !registry.models) return;
 
     // Clear existing configurations
     this.models.wakeword.available = {};
     this.models.whisper.available = {};
-
-    // Create a quick lookup map from manifest if available
-    const manifestModels = {};
-    if (manifest && manifest.models && manifest.models.whisper) {
-      for (const [modelId, modelData] of Object.entries(manifest.models.whisper)) {
-        manifestModels[modelId] = modelData;
-      }
-    }
 
     // Process each model in the registry
     for (const model of registry.models) {
@@ -384,21 +358,8 @@ const Config = {
         case 'asr':
           // Whisper model configuration
           if (model.id.startsWith('whisper')) {
-            let modelCheck = { hasStandard: false, hasQuantized: false, exists: false };
-            
-            // Use manifest data if available (much faster)
-            if (manifestModels[model.id]) {
-              const manifestModel = manifestModels[model.id];
-              // Assume models in manifest exist
-              modelCheck.hasStandard = !!manifestModel.files?.standard;
-              modelCheck.hasQuantized = !!manifestModel.files?.quantized;
-              modelCheck.exists = modelCheck.hasStandard || modelCheck.hasQuantized;
-              console.log(`Using manifest for ${model.id}: standard=${modelCheck.hasStandard}, quantized=${modelCheck.hasQuantized}`);
-            } else {
-              // Fallback to checking files (slower)
-              console.log(`No manifest entry for ${model.id}, checking files...`);
-              modelCheck = await this.checkWhisperModelExists(fullPath, model.files);
-            }
+            // 檢查模型檔案是否存在
+            const modelCheck = await this.checkWhisperModelExists(fullPath, model.files);
             
             if (!modelCheck.exists) {
               console.log(`Whisper model ${model.id} not found locally, skipping`);

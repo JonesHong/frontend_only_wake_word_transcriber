@@ -118,12 +118,17 @@ export class WhisperEngine extends SpeechRecognitionEngine {
             };
 
             // 初始化 Worker（包含輸出模式配置和基礎路徑）
+            // 檢測是否在 GitHub Pages 環境，預設使用量化版本
+            const isGitHubPages = window.location.hostname.includes('github') || 
+                                 window.location.hostname.includes('github.io');
+            
             await this.sendWorkerMessage({
                 type: 'initialize',
                 config: {
                     ...this.config,
                     whisperOutputMode: window.Config?.speech?.whisperOutputMode || 'streaming',
-                    basePath: basePath  // 傳遞基礎路徑給 Worker
+                    basePath: basePath,  // 傳遞基礎路徑給 Worker
+                    quantized: isGitHubPages || window.Config?.models?.whisper?.quantized || false  // 傳遞量化標記
                 }
             });
 
