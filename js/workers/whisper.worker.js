@@ -25,7 +25,7 @@ try {
         // 正常的 Worker URL
         const workerPath = self.location.pathname;
         // 移除 worker 檔名和 js/workers 目錄
-        modelBasePath = workerPath.replace(/\/js\/workers\/[^\/]*$/, '') + '/models/';
+        modelBasePath = workerPath.replace(/\/js\/workers\/[^\/]*$/, '') ;
     }
 } catch (e) {
     console.warn('[WhisperWorker] Failed to calculate model base path, using default:', e);
@@ -234,6 +234,7 @@ async function handleInitialize(data) {
         console.log('[WhisperWorker] Initializing Transformers.js with base path:', finalBasePath);
         
         // 動態導入 Transformers.js
+        // const transformersModule = await import('https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.7.1');
         const transformersModule = await import('https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2');
         pipeline = transformersModule.pipeline;
         env = transformersModule.env;
@@ -241,6 +242,7 @@ async function handleInitialize(data) {
         // 配置 Transformers.js 環境
         env.allowLocalModels = true;  // 使用本地模型
         env.allowRemoteModels = false;  // 預設禁用遠端模型
+        env.localModelPath = finalBasePath;  // 設定本地模型路徑
         env.localURL = finalBasePath;  // 設定應用程式根目錄（不包含 /models/）
         
         transformersInitialized = true;
