@@ -167,7 +167,7 @@ const Config = {
       this.models.registryData = registry;
       
       // Process and populate model configurations
-      this.processRegistry(registry);
+      await this.processRegistry(registry);
       
       if (this.development.logModelLoading) {
         console.log('Model registry loaded successfully', registry);
@@ -182,8 +182,71 @@ const Config = {
     }
   },
 
+  // Check if a model file exists
+  async checkModelExists(path) {
+    try {
+      // Try to fetch the file with HEAD request to check existence
+      const response = await fetch(path, { method: 'HEAD' });
+      return response.ok;
+    } catch (error) {
+      // If HEAD fails, try GET with range header to minimize data transfer
+      try {
+        const response = await fetch(path, {
+          headers: { 'Range': 'bytes=0-0' }
+        });
+        return response.ok || response.status === 206; // 206 is partial content
+      } catch (err) {
+        console.log(`Model file not found: ${path}`);
+        return false;
+      }
+    }
+  },
+
+  // Check if model directory has required files
+  async checkWhisperModelExists(modelPath, files) {
+    // Check both quantized and standard versions
+    const quantizedFiles = [
+      'onnx/encoder_model_quantized.onnx',
+      'onnx/decoder_model_merged_quantized.onnx'
+    ];
+    
+    const standardFiles = [
+      'onnx/encoder_model.onnx',
+      'onnx/decoder_model_merged.onnx'
+    ];
+    
+    // Check quantized versions
+    let hasQuantized = true;
+    for (const file of quantizedFiles) {
+      const fullPath = `${modelPath}/${file}`;
+      const exists = await this.checkModelExists(fullPath);
+      if (!exists) {
+        hasQuantized = false;
+        break;
+      }
+    }
+    
+    // Check standard versions
+    let hasStandard = true;
+    for (const file of standardFiles) {
+      const fullPath = `${modelPath}/${file}`;
+      const exists = await this.checkModelExists(fullPath);
+      if (!exists) {
+        hasStandard = false;
+        break;
+      }
+    }
+    
+    // Return both states
+    return { 
+      hasQuantized: hasQuantized,
+      hasStandard: hasStandard,
+      exists: hasQuantized || hasStandard
+    };
+  },
+
   // Process registry data and populate model configurations
-  processRegistry(registry) {
+  async processRegistry(registry) {
     if (!registry || !registry.models) return;
 
     // Clear existing configurations
@@ -191,7 +254,7 @@ const Config = {
     this.models.whisper.available = {};
 
     // Process each model in the registry
-    registry.models.forEach(model => {
+    for (const model of registry.models) {
       const basePath = 'models/';
       const fullPath = basePath + model.local_path;
       
@@ -267,41 +330,46 @@ const Config = {
         case 'asr':
           // Whisper model configuration
           if (model.id.startsWith('whisper')) {
-            // 標準模型
-            this.models.whisper.available[model.id] = {
-              path: fullPath,
-              name: model.name,
-              size: model.specs?.size_mb || 0,
-              multilingual: model.features?.multilingual || false,
-              description: model.description,
-              quantized: false,
-              files: model.files
-            };
+            // 檢查模型檔案是否存在
+            const modelCheck = await this.checkWhisperModelExists(fullPath, model.files);
             
-            // 檢查是否有 quantized 版本
-            if (model.files && model.files.optional) {
-              const hasQuantized = model.files.optional.some(f => 
-                f.includes('quantized')
-              );
-              
-              if (hasQuantized) {
-                // 添加 quantized 版本作為獨立選項
-                const quantizedId = model.id + '-quantized';
-                this.models.whisper.available[quantizedId] = {
-                  path: fullPath,
-                  name: model.name + ' (Quantized)',
-                  size: Math.round((model.specs?.size_mb || 0) * 0.25), // 量化版本通常較小
-                  multilingual: model.features?.multilingual || false,
-                  description: model.description + ' - 量化版本，速度更快但準確度略低',
-                  quantized: true,
-                  files: model.files
-                };
-              }
+            if (!modelCheck.exists) {
+              console.log(`Whisper model ${model.id} not found locally, skipping`);
+              break;
+            }
+            
+            // 添加標準版本（如果存在）
+            if (modelCheck.hasStandard) {
+              this.models.whisper.available[model.id] = {
+                path: fullPath,
+                name: model.name,
+                size: model.specs?.size_mb || 0,
+                multilingual: model.features?.multilingual || false,
+                description: model.description,
+                quantized: false,
+                files: model.files
+              };
+              console.log(`Added standard Whisper model: ${model.id}`);
+            }
+            
+            // 添加量化版本（如果存在）
+            if (modelCheck.hasQuantized) {
+              const quantizedId = model.id + '-quantized';
+              this.models.whisper.available[quantizedId] = {
+                path: fullPath,
+                name: model.name + ' (Quantized)',
+                size: Math.round((model.specs?.size_mb || 0) * 0.25), // 量化版本通常較小
+                multilingual: model.features?.multilingual || false,
+                description: model.description + ' - 量化版本，速度更快但準確度略低',
+                quantized: true,
+                files: model.files
+              };
+              console.log(`Added quantized Whisper model: ${quantizedId}`);
             }
           }
           break;
       }
-    });
+    }
 
     // Ensure default models exist
     if (!this.models.wakeword.available[this.models.wakeword.default]) {

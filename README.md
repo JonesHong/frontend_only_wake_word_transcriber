@@ -92,9 +92,48 @@ voice-assistant/
 │   ├── alexa_v0.1.onnx          # Alexa wake word model
 │   ├── embedding_model.onnx     # Audio feature extraction model
 │   ├── melspectrogram.onnx      # Spectrogram conversion model
-│   └── silero_vad.onnx          # VAD detection model
+│   ├── silero_vad.onnx          # VAD detection model
+│   └── whisper-tiny/             # Whisper speech transcription model (included for demo)
+├── tools/              # Utility scripts
+│   └── sync_registry_models.py  # Script to download additional models
 └── reference/          # Reference materials and example code
 ```
+
+## 📦 Model Management
+
+### Included Models
+The repository includes essential models for GitHub Pages deployment:
+- **Wake Word Models**: Hey Jarvis, Hey Mycroft, Alexa (small size, ~800KB-1.3MB each)
+- **VAD Model**: Silero VAD for voice activity detection (~1.8MB)
+- **Whisper Tiny Quantized**: Smallest Whisper model for speech transcription (~40MB total)
+  - Provides good transcription quality for demos
+  - Suitable for GitHub Pages deployment
+
+### Downloading Additional Models
+For larger Whisper models (base, small, medium, large) with better accuracy:
+
+1. **Using the sync script** (for developers who clone the repository):
+   ```bash
+   # Download all models from registry
+   python3 tools/sync_registry_models.py
+   
+   # Download specific model category
+   python3 tools/sync_registry_models.py --category whisper
+   ```
+
+2. **Manual download**:
+   - Visit [Hugging Face](https://huggingface.co/Xenova) for Whisper models
+   - Download desired model files to `models/huggingface/Xenova/[model-name]/onnx/`
+   - Update model configuration in settings as needed
+
+### Model Size Reference
+- **whisper-tiny-quantized**: ~40MB (included)
+- **whisper-base-quantized**: ~75MB 
+- **whisper-small-quantized**: ~195MB
+- **whisper-medium**: ~1.5GB
+- **whisper-large**: ~3GB
+
+> **Note**: Only whisper-tiny-quantized is included for GitHub Pages compatibility. Larger models provide better accuracy but require local deployment due to file size constraints.
 
 ## 🌐 Deployment
 

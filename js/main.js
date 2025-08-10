@@ -119,7 +119,11 @@ class VoiceAssistantApp {
                 
                 // 驗證載入成功
                 console.log('Config 載入完成，可用的喚醒詞模型:', Object.keys(window.Config.models.wakeword.available));
+                console.log('Config 載入完成，可用的 Whisper 模型:', Object.keys(window.Config.models.whisper.available));
                 console.log('VAD 模型路徑:', window.Config.models.vad.model);
+                
+                // 在 Config 載入完成後初始化 Whisper 模型列表
+                this.initializeWhisperModelList();
             } else {
                 throw new Error('Config 物件不存在');
             }
@@ -1324,14 +1328,17 @@ class VoiceAssistantApp {
         
         // 移除點擊切換功能，現在一直顯示模型列表
         
-        // 初始化 Whisper 模型列表
-        this.initializeWhisperModelList();
+        // 延遲初始化 Whisper 模型列表，等待 Config 載入完成
+        // 將在 initialize() 完成後調用
         
         // 初始化時根據預設選擇（Whisper）顯示模型選擇列表
-        const checkedEngine = document.querySelector('input[name="engineSelect"]:checked');
-        if (checkedEngine) {
-            this.handleEngineChange(checkedEngine.value);
-        }
+        // 但這將在 Config 載入完成後執行
+        setTimeout(() => {
+            const checkedEngine = document.querySelector('input[name="engineSelect"]:checked');
+            if (checkedEngine) {
+                this.handleEngineChange(checkedEngine.value);
+            }
+        }, 100);
         
         // 監聽網路狀態變化
         window.addEventListener('online', () => {

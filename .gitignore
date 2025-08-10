@@ -74,6 +74,45 @@ models/**/*.txt
 !models/github/snakers4/
 !models/github/snakers4/silero-vad/
 !models/github/snakers4/silero-vad/silero_vad.onnx
+# Keep whisper-tiny quantized models for GitHub Pages demo
+!models/huggingface/
+!models/huggingface/Xenova/
+!models/huggingface/Xenova/whisper-tiny/
+!models/huggingface/Xenova/whisper-tiny/config.json
+!models/huggingface/Xenova/whisper-tiny/generation_config.json
+!models/huggingface/Xenova/whisper-tiny/tokenizer.json
+!models/huggingface/Xenova/whisper-tiny/tokenizer_config.json
+!models/huggingface/Xenova/whisper-tiny/onnx/
+!models/huggingface/Xenova/whisper-tiny/onnx/decoder_model_merged_quantized.onnx
+!models/huggingface/Xenova/whisper-tiny/onnx/encoder_model_quantized.onnx
+
+!models/huggingface/Xenova/whisper-tiny.en/
+!models/huggingface/Xenova/whisper-tiny.en/config.json
+!models/huggingface/Xenova/whisper-tiny.en/generation_config.json
+!models/huggingface/Xenova/whisper-tiny.en/tokenizer.json
+!models/huggingface/Xenova/whisper-tiny.en/tokenizer_config.json
+!models/huggingface/Xenova/whisper-tiny.en/onnx/
+!models/huggingface/Xenova/whisper-tiny.en/onnx/decoder_model_merged_quantized.onnx
+!models/huggingface/Xenova/whisper-tiny.en/onnx/encoder_model_quantized.onnx
+
+!models/huggingface/Xenova/whisper-base/
+!models/huggingface/Xenova/whisper-base/config.json
+!models/huggingface/Xenova/whisper-base/generation_config.json
+!models/huggingface/Xenova/whisper-base/tokenizer.json
+!models/huggingface/Xenova/whisper-base/tokenizer_config.json
+!models/huggingface/Xenova/whisper-base/onnx/
+!models/huggingface/Xenova/whisper-base/onnx/decoder_model_merged_quantized.onnx
+!models/huggingface/Xenova/whisper-base/onnx/encoder_model_quantized.onnx
+
+!models/huggingface/Xenova/whisper-base.en/
+!models/huggingface/Xenova/whisper-base.en/config.json
+!models/huggingface/Xenova/whisper-base.en/generation_config.json
+!models/huggingface/Xenova/whisper-base.en/tokenizer.json
+!models/huggingface/Xenova/whisper-base.en/tokenizer_config.json
+!models/huggingface/Xenova/whisper-base.en/onnx/
+!models/huggingface/Xenova/whisper-base.en/onnx/decoder_model_merged_quantized.onnx
+!models/huggingface/Xenova/whisper-base.en/onnx/encoder_model_quantized.onnx
+
 
 # Jupyter notebooks
 reference/Open Wake Model.ipynb

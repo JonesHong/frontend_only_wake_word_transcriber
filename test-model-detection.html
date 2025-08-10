@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>模型檢測測試</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        h1 {
+            color: #333;
+            border-bottom: 2px solid #3B82F6;
+            padding-bottom: 10px;
+        }
+        .section {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        h2 {
+            color: #555;
+            margin-top: 0;
+        }
+        .model-item {
+            padding: 10px;
+            margin: 5px 0;
+            background: #f9f9f9;
+            border-left: 3px solid #3B82F6;
+            border-radius: 4px;
+        }
+        .model-name {
+            font-weight: bold;
+            color: #333;
+        }
+        .model-info {
+            color: #666;
+            font-size: 0.9em;
+            margin-top: 5px;
+        }
+        .status {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.85em;
+            margin-left: 10px;
+        }
+        .status.exists {
+            background: #10B981;
+            color: white;
+        }
+        .status.missing {
+            background: #EF4444;
+            color: white;
+        }
+        .status.quantized {
+            background: #3B82F6;
+            color: white;
+        }
+        .loading {
+            color: #999;
+            font-style: italic;
+        }
+        .error {
+            color: #EF4444;
+            background: #FEE2E2;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        .summary {
+            background: #EFF6FF;
+            border: 1px solid #3B82F6;
+            padding: 15px;
+            border-radius: 4px;
+            margin-top: 20px;
+        }
+        .code {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 15px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔍 Whisper 模型檢測測試</h1>
+    
+    <div class="section">
+        <h2>測試說明</h2>
+        <p>這個測試頁面會檢查 global_registry.json 中列出的所有 Whisper 模型，並顯示哪些模型實際存在於本地。</p>
+    </div>
+
+    <div class="section">
+        <h2>檢測結果</h2>
+        <div id="results" class="loading">正在載入模型配置...</div>
+    </div>
+
+    <div class="section">
+        <h2>實際可用模型列表</h2>
+        <div id="available" class="loading">等待檢測完成...</div>
+    </div>
+
+    <div class="section">
+        <h2>測試程式碼</h2>
+        <div class="code" id="code">
+// 載入並檢測模型
+async function testModelDetection() {
+    // 載入 config.js
+    await loadScript('js/config.js');
+    
+    // 初始化配置
+    await window.Config.init();
+    
+    // 顯示檢測結果
+    displayResults();
+}
+        </div>
+    </div>
+
+    <script>
+        async function loadScript(src) {
+            return new Promise((resolve, reject) => {
+                const script = document.createElement('script');
+                script.src = src;
+                script.onload = resolve;
+                script.onerror = reject;
+                document.head.appendChild(script);
+            });
+        }
+
+        async function testModelDetection() {
+            const resultsDiv = document.getElementById('results');
+            const availableDiv = document.getElementById('available');
+            
+            try {
+                // 載入 config.js
+                resultsDiv.innerHTML = '載入 config.js...';
+                await loadScript('js/config.js');
+                
+                // 初始化配置
+                resultsDiv.innerHTML = '初始化配置...';
+                await window.Config.init();
+                
+                // 獲取所有註冊的模型
+                const registry = window.Config.models.registryData;
+                const whisperModels = registry.models.filter(m => m.id.startsWith('whisper'));
+                
+                // 顯示檢測結果
+                let html = '<h3>從 global_registry.json 檢測的模型：</h3>';
+                
+                for (const model of whisperModels) {
+                    const basePath = 'models/' + model.local_path;
+                    
+                    // 檢查模型是否存在
+                    const modelCheck = await window.Config.checkWhisperModelExists(basePath, model.files);
+                    
+                    html += `
+                        <div class="model-item">
+                            <div class="model-name">
+                                ${model.name}
+                                <span class="status ${modelCheck.exists ? 'exists' : 'missing'}">
+                                    ${modelCheck.exists ? '✓ 存在' : '✗ 不存在'}
+                                </span>
+                                ${modelCheck.quantized ? '<span class="status quantized">量化版本</span>' : ''}
+                            </div>
+                            <div class="model-info">
+                                ID: ${model.id}<br>
+                                路徑: ${basePath}<br>
+                                大小: ${model.specs?.size_mb || 'N/A'} MB<br>
+                                狀態: ${modelCheck.exists ? 
+                                    (modelCheck.quantized ? '找到量化版本檔案' : '找到標準版本檔案') : 
+                                    '未找到必要的模型檔案'}
+                            </div>
+                        </div>
+                    `;
+                }
+                
+                resultsDiv.innerHTML = html;
+                
+                // 顯示實際可用的模型
+                const availableModels = window.Config.models.whisper.available;
+                let availableHtml = '<h3>Config.models.whisper.available 中的模型：</h3>';
+                
+                if (Object.keys(availableModels).length === 0) {
+                    availableHtml += '<p class="error">沒有找到任何可用的 Whisper 模型</p>';
+                } else {
+                    availableHtml += '<div class="summary">';
+                    availableHtml += `<strong>找到 ${Object.keys(availableModels).length} 個可用模型：</strong><br><br>`;
+                    
+                    Object.entries(availableModels).forEach(([id, model]) => {
+                        availableHtml += `
+                            <div class="model-item">
+                                <div class="model-name">
+                                    ${model.name}
+                                    ${model.quantized ? '<span class="status quantized">量化</span>' : ''}
+                                </div>
+                                <div class="model-info">
+                                    ID: ${id}<br>
+                                    路徑: ${model.path}<br>
+                                    大小: ${model.size} MB<br>
+                                    多語言: ${model.multilingual ? '是' : '否'}
+                                </div>
+                            </div>
+                        `;
+                    });
+                    
+                    availableHtml += '</div>';
+                }
+                
+                availableDiv.innerHTML = availableHtml;
+                
+            } catch (error) {
+                resultsDiv.innerHTML = `<div class="error">錯誤: ${error.message}</div>`;
+                console.error('測試失敗:', error);
+            }
+        }
+
+        // 啟動測試
+        testModelDetection();
+    </script>
+</body>
+</html>
