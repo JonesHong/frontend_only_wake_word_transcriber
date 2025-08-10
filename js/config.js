@@ -8,7 +8,7 @@ const Config = {
   // Application metadata
   app: {
     name: 'Frontend-Only Wake Word Transcriber',
-    version: '2.0.1',
+    version: '2.0.9',
     description: 'Pure frontend voice assistant with wake word detection',
     repository: 'https://github.com/JonesHong/frontend_only_wake_word_transcriber'
   },
@@ -398,6 +398,7 @@ const Config = {
                 files: model.files
               };
               console.log(`Added quantized Whisper model for GitHub Pages: ${model.id}`);
+              continue; // 在 GitHub Pages 環境下處理完後跳過後續邏輯
             } else {
               // 非 GitHub Pages 環境的原始邏輯
               // 添加標準版本（如果存在）

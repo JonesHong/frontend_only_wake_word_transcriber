@@ -155,7 +155,8 @@ class ModelLoadingUI {
 
 // 創建全局實例
 document.addEventListener('DOMContentLoaded', () => {
-    window.ModelLoadingUI = new ModelLoadingUI();
+    // 暫時停用右下角的載入視窗，避免與全螢幕載入提示重複
+    // window.ModelLoadingUI = new ModelLoadingUI();
     
     // 添加必要的樣式
     if (!document.getElementById('model-loading-ui-styles')) {

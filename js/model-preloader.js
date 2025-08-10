@@ -83,6 +83,11 @@ class ModelPreloader {
     async fetchWithRetry(url, fileName, retries = 3) {
         this.loadingStatus.set(fileName, { status: 'loading', progress: 0 });
         
+        // 發送載入開始事件
+        window.dispatchEvent(new CustomEvent('modelLoadStart', {
+            detail: { modelName: fileName }
+        }));
+        
         for (let i = 0; i < retries; i++) {
             try {
                 console.log(`[ModelPreloader] Loading ${fileName} (attempt ${i + 1}/${retries})`);
@@ -104,7 +109,7 @@ class ModelPreloader {
                 const total = parseInt(contentLength, 10);
                 
                 // 如果有內容長度，追蹤下載進度
-                if (total) {
+                if (total && !isNaN(total) && total > 0) {
                     const reader = response.body.getReader();
                     const chunks = [];
                     let received = 0;
@@ -117,12 +122,13 @@ class ModelPreloader {
                         chunks.push(value);
                         received += value.length;
                         
-                        const progress = (received / total) * 100;
+                        // 確保進度不超過 100%
+                        const progress = Math.min((received / total) * 100, 100);
                         this.loadingStatus.set(fileName, { status: 'loading', progress });
                         
                         // 發送進度事件
                         window.dispatchEvent(new CustomEvent('modelLoadProgress', {
-                            detail: { fileName, progress, received, total }
+                            detail: { fileName, progress: Math.round(progress), received, total }
                         }));
                     }
 
@@ -216,16 +222,29 @@ document.addEventListener('DOMContentLoaded', async () => {
         
         // 延遲主動預載入（給主要資源載入優先權）
         setTimeout(async () => {
-            console.log('[ModelPreloader] Starting active preload...');
-            
-            // 如果用戶還沒有開始使用，主動預載入第一個模型
-            if (window.Config && window.Config.models.whisper.default) {
-                const defaultModel = window.Config.models.whisper.default;
-                const modelInfo = window.Config.getModelInfo('whisper', defaultModel);
+            try {
+                console.log('[ModelPreloader] Starting active preload...');
                 
-                if (modelInfo && modelInfo.path) {
-                    await window.ModelPreloader.preloadModelWithCache(modelInfo.path);
+                // 確保 Config 已經初始化完成
+                if (window.Config && window.Config.models && window.Config.models.whisper && window.Config.models.whisper.available) {
+                    const defaultModel = window.Config.models.whisper.default;
+                    if (defaultModel) {
+                        const modelInfo = window.Config.getModelInfo('whisper', defaultModel);
+                        
+                        if (modelInfo && modelInfo.path) {
+                            console.log(`[ModelPreloader] Preloading default model: ${defaultModel}`);
+                            await window.ModelPreloader.preloadModelWithCache(modelInfo.path);
+                        } else {
+                            console.log('[ModelPreloader] Default model not found, skipping preload');
+                        }
+                    } else {
+                        console.log('[ModelPreloader] No default model configured, skipping preload');
+                    }
+                } else {
+                    console.log('[ModelPreloader] Config not ready, skipping preload');
                 }
+            } catch (error) {
+                console.error('[ModelPreloader] Error during active preload:', error);
             }
         }, 5000); // 5 秒後開始
     }

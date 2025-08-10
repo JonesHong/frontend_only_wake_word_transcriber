@@ -90,9 +90,8 @@ class VoiceAssistantApp {
         this.batchDownloadAudioBtn = document.getElementById('batchDownloadAudioBtn');
         // 批次模式暫時不使用獨立的 canvas，因為會重用主要的 waveformCanvas
         
-        const loadingOverlay = document.getElementById('loadingOverlay');
-        const loadingText = document.getElementById('loadingText');
-        const progressBar = document.querySelector('.progress-bar');
+        // 使用新的 LoadingManager
+        const loadingManager = window.LoadingManager;
         
         // 設定事件監聽器
         this.setupEventListeners();
@@ -100,8 +99,8 @@ class VoiceAssistantApp {
         // 初始化所有模組
         try {
             // 更新載入進度
-            loadingText.textContent = '正在初始化視覺化元件...';
-            progressBar.style.width = '20%';
+            loadingManager.updateText('正在初始化視覺化元件...');
+            loadingManager.setProgress(20);
             
             // 初始化視覺化
             if (!window.visualizer.initialize()) {
@@ -109,8 +108,8 @@ class VoiceAssistantApp {
             }
             
             // 確保 Config 已經初始化完成（載入 registry）
-            loadingText.textContent = '正在載入模型註冊表...';
-            progressBar.style.width = '30%';
+            loadingManager.updateText('正在載入模型註冊表...');
+            loadingManager.setProgress(30);
             
             if (window.Config) {
                 // 總是重新初始化以確保載入完成
@@ -129,22 +128,38 @@ class VoiceAssistantApp {
             }
             
             // 更新載入進度
-            loadingText.textContent = '正在載入喚醒詞模型...';
-            progressBar.style.width = '40%';
+            loadingManager.updateText('正在載入喚醒詞模型...');
+            loadingManager.setProgress(40);
+            
+            // 發送載入開始事件
+            window.dispatchEvent(new CustomEvent('modelLoadStart', {
+                detail: { modelName: '喚醒詞模型' }
+            }));
             
             // 初始化喚醒詞偵測器
             await window.wakewordDetector.initialize();
             
             // 更新載入進度
-            loadingText.textContent = '正在載入 VAD 模型...';
-            progressBar.style.width = '60%';
+            loadingManager.updateText('正在載入 VAD 模型...');
+            loadingManager.setProgress(60);
+            
+            // 發送載入開始事件
+            window.dispatchEvent(new CustomEvent('modelLoadStart', {
+                detail: { modelName: 'VAD 模型' }
+            }));
             
             // 初始化 VAD
             await window.voiceActivityDetector.initialize();
             
             // 更新載入進度
-            loadingText.textContent = '正在初始化語音轉譯器...';
-            progressBar.style.width = '80%';
+            loadingManager.updateText('正在初始化語音轉譯器...');
+            loadingManager.setProgress(80);
+            
+            // 發送載入開始事件
+            const whisperModel = window.Config?.models?.whisper?.default || 'whisper-base';
+            window.dispatchEvent(new CustomEvent('modelLoadStart', {
+                detail: { modelName: `Whisper 模型: ${whisperModel}` }
+            }));
             
             // 初始化語音識別管理器
             this.speechRecognitionManager = getSpeechRecognitionManager({
@@ -223,8 +238,11 @@ class VoiceAssistantApp {
             // 語音轉譯回調已在上方設定
             
             // 更新載入進度
-            progressBar.style.width = '100%';
-            loadingText.textContent = '初始化完成！';
+            loadingManager.setProgress(100);
+            loadingManager.updateText('初始化完成！');
+            
+            // 發送載入完成事件
+            window.dispatchEvent(new CustomEvent('modelLoadComplete'));
             
             this.isInitialized = true;
             console.log('語音助理應用初始化完成');
@@ -235,19 +253,16 @@ class VoiceAssistantApp {
                 this.updateModelDisplay(currentModel);
             }
             
-            // 隱藏載入畫面
-            setTimeout(() => {
-                loadingOverlay.classList.add('hidden');
-            }, 500);
+            // LoadingManager 會自動隱藏載入畫面
             
         } catch (error) {
             console.error('初始化失敗:', error);
-            loadingText.textContent = '初始化失敗: ' + error.message;
+            loadingManager.updateText('初始化失敗: ' + error.message);
             this.updateStatus('初始化失敗: ' + error.message);
             
             // 延遲後隱藏載入畫面
             setTimeout(() => {
-                loadingOverlay.classList.add('hidden');
+                loadingManager.hide();
             }, 2000);
         }
     }
