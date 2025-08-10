@@ -63,6 +63,7 @@ models/**/*.txt
 !models/**/.gitkeep
 !models/README.md
 !models/global_registry.json
+!models/manifest.json
 !models/github/
 !models/github/dscripka/
 !models/github/dscripka/openWakeWord/
