@@ -216,7 +216,7 @@ async function handleInitialize(data) {
     
     // 如果主線程提供了 basePath，更新模型路徑
     if (basePath) {
-        env.localURL = basePath + '/models/';
+        env.localURL = basePath + 'models/';
         console.log('[WhisperWorker] Updated model base path from main thread:', env.localURL);
     }
     
