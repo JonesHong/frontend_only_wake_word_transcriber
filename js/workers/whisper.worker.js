@@ -210,16 +210,18 @@ self.onmessage = async (event) => {
  * 初始化 Worker
  */
 async function handleInitialize(data) {
-    const { language = 'zh', task = 'transcribe', whisperOutputMode = 'streaming', basePath, quantized = false } = data.config || {};
+    // 在 GitHub Pages 上預設使用量化版本
+    const isGitHubPages = self.location.origin.includes('github') || self.location.origin.includes('github.io');
+    const defaultQuantized = isGitHubPages ? true : false;
+    
+    const { language = 'zh', task = 'transcribe', whisperOutputMode = 'streaming', basePath, quantized = defaultQuantized } = data.config || {};
     currentLanguage = normalizeLanguage(language);
     currentTask = task;
     outputMode = whisperOutputMode;
     
     // 設置預設的量化標記（用於初始化時的檔案載入）
-    if (quantized) {
-        AutomaticSpeechRecognitionPipelineFactory.quantized = quantized;
-        console.log('[WhisperWorker] Default quantized mode set to:', quantized);
-    }
+    AutomaticSpeechRecognitionPipelineFactory.quantized = quantized;
+    console.log('[WhisperWorker] Default quantized mode set to:', quantized);
     
     // 如果尚未初始化 Transformers.js，現在初始化
     if (!transformersInitialized) {
@@ -296,16 +298,22 @@ async function handleLoadModel(data) {
     // 2. HuggingFace ID: Xenova/whisper-base  
     // 3. 配置傳入的路徑: models/huggingface/onnx-community/whisper-large-v3-turbo
     
-    let { model = 'models/huggingface/Xenova/whisper-base', config = {}, quantized = false } = data;
+    // 在 GitHub Pages 上預設使用量化版本
+    const isGitHubPages = self.location.origin.includes('github') || self.location.origin.includes('github.io');
+    const defaultQuantized = isGitHubPages ? true : false;
+    
+    let { model = 'models/huggingface/Xenova/whisper-base', config = {}, quantized = defaultQuantized } = data;
     
     // 處理配置傳入的路徑
     if (config && config.model) {
         model = config.model;
     }
     
-    // 處理量化選項
+    // 處理量化選項 - GitHub Pages 強制使用量化版本
     if (config && typeof config.quantized !== 'undefined') {
         quantized = config.quantized;
+    } else if (isGitHubPages) {
+        quantized = true; // GitHub Pages 強制量化
     }
     
     // 處理模型來源配置 (local or remote)

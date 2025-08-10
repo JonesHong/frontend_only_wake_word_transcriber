@@ -49,15 +49,24 @@ export class WhisperEngine extends SpeechRecognitionEngine {
         // 設定預設配置
         // 從 Config 獲取預設模型路徑
         let defaultModel = 'models/huggingface/Xenova/whisper-base';
+        let defaultQuantized = false;
+        
         if (window.Config && window.Config.models.whisper.default) {
             const modelInfo = window.Config.getModelInfo('whisper', window.Config.models.whisper.default);
             if (modelInfo) {
                 defaultModel = modelInfo.path;
+                // 在 GitHub Pages 上，使用模型的量化設定，預設為 true
+                const isGitHubPages = window.location.hostname.includes('github') || 
+                                     window.location.hostname.includes('github.io');
+                defaultQuantized = modelInfo.quantized !== undefined ? 
+                                  modelInfo.quantized : 
+                                  (isGitHubPages ? true : false);
             }
         }
         
         this.config = {
             model: defaultModel,
+            quantized: defaultQuantized,
             language: 'zh',  // Whisper 使用 ISO 639-1 代碼
             task: 'transcribe',
             ...this.config
@@ -305,7 +314,12 @@ export class WhisperEngine extends SpeechRecognitionEngine {
             // 更新配置
             this.config.model = modelInfo.path;
             this.config.modelId = modelId;
-            this.config.quantized = modelInfo.quantized || false;
+            // 在 GitHub Pages 上，如果模型資訊中有 quantized 標記，使用它；否則預設為 true
+            const isGitHubPages = window.location.hostname.includes('github') || 
+                                 window.location.hostname.includes('github.io');
+            this.config.quantized = modelInfo.quantized !== undefined ? 
+                                   modelInfo.quantized : 
+                                   (isGitHubPages ? true : false);
             
             // 標記需要重新載入
             this.modelLoaded = false;
