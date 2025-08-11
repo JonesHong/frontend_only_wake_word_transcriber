@@ -999,24 +999,29 @@ canvas {
 /* 即時轉譯顯示樣式 */
 .interim-transcription {
     padding: 12px;
-    margin-bottom: 8px;
+    margin-bottom: 12px;
     background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%);
     border: 1px solid #ffeaa7;
     border-radius: 8px;
     font-style: normal;
-    color: #856404;
     position: relative;
-    display: inline-block;
+    display: block;
 }
 
 .dark .interim-transcription {
     background: linear-gradient(135deg, #564217 0%, #6b5220 100%);
     border-color: #6b5220;
-    color: #ffd93d;
+}
+
+.interim-transcription .interim-text {
+    font-size: 16px;
+    line-height: 1.5;
+    min-height: 24px;
+    word-break: break-word;
 }
 
 /* 終端機游標效果 */
-.interim-transcription::after {
+.interim-transcription .interim-text::after {
     content: '|';
     display: inline-block;
     margin-left: 2px;

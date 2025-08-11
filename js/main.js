@@ -260,6 +260,12 @@ class VoiceAssistantApp {
                 this.updateModelDisplay(currentModel);
             }
             
+            // 確保即時轉譯容器初始是隱藏的
+            const interimContainer = document.getElementById('interimTranscriptionContainer');
+            if (interimContainer) {
+                interimContainer.style.display = 'none';
+            }
+            
             // LoadingManager 會自動隱藏載入畫面
             
         } catch (error) {
@@ -299,8 +305,8 @@ class VoiceAssistantApp {
         this.downloadAudioBtn.addEventListener('click', () => this.downloadAllAudio());
         
         // 模式切換按鈕
-        this.streamingModeBtn?.addEventListener('click', () => this.switchToStreamingMode());
-        this.batchModeBtn?.addEventListener('click', () => this.switchToBatchMode());
+        this.streamingModeBtn?.addEventListener('click', async () => await this.switchToStreamingMode());
+        this.batchModeBtn?.addEventListener('click', async () => await this.switchToBatchMode());
         
         // 批次模式事件
         this.setupBatchModeListeners();
@@ -445,23 +451,41 @@ class VoiceAssistantApp {
         switch (newState) {
             case 'Initialization':
                 // 停止所有處理
+                // 確保即時轉譯容器是隱藏的
+                this.clearInterimDisplay();
                 break;
                 
             case 'Idle':
+                // 立即清除並隱藏即時轉譯內容
+                this.clearInterimDisplay();
+                
                 // 如果從 Listening 狀態返回，播放結束音效
                 if (oldState === 'Listening') {
                     this.playEndSound();
                     
-                    // 設定音訊緩衝區供保存用
+                    // 設定音訊緩衝區供保存用（傳遞複製的陣列，避免被清空）
                     if (this.currentAudioBuffer.length > 0) {
-                        window.speechTranscriber.setAudioBuffer(this.currentAudioBuffer);
-                        this.currentAudioBuffer = [];
+                        // 為 speechTranscriber 設定音訊緩衝區
+                        if (window.speechTranscriber) {
+                            window.speechTranscriber.setAudioBuffer([...this.currentAudioBuffer]);
+                        }
+                        
+                        // 直接為 speechRecognitionManager 建立音訊 URL
+                        if (this.speechRecognitionManager) {
+                            const audioUrl = this.createAudioUrl(this.currentAudioBuffer);
+                            if (audioUrl) {
+                                // 暫存音訊 URL 供後續使用
+                                this.lastRecordingUrl = audioUrl;
+                            }
+                        }
                     }
+                    // 清空本地緩衝區
+                    this.currentAudioBuffer = [];
                     
-                    // 清除臨時顯示框
-                    const interimDiv = document.getElementById('interimTranscription');
-                    if (interimDiv) {
-                        interimDiv.remove();
+                    // 確保即時轉譯容器被隱藏
+                    const interimContainer = document.getElementById('interimTranscriptionContainer');
+                    if (interimContainer) {
+                        interimContainer.style.display = 'none';
                     }
                 }
                 
@@ -477,8 +501,26 @@ class VoiceAssistantApp {
                 // 播放開始音效
                 this.playStartSound();
                 
+                // 顯示即時轉譯容器並準備顯示內容
+                const interimContainer = document.getElementById('interimTranscriptionContainer');
+                const interimTextDiv = document.querySelector('#interimTranscription .interim-text');
+                
+                if (interimContainer) {
+                    // 顯示容器
+                    interimContainer.style.display = 'block';
+                }
+                
+                if (interimTextDiv) {
+                    // 清空舊內容，準備顯示新的即時轉譯
+                    interimTextDiv.textContent = '';
+                }
+                
                 // 清空音訊緩衝區並啟動語音轉譯
                 this.currentAudioBuffer = [];
+                // 同時清空 speechTranscriber 的音訊緩衝區，為新會話準備
+                if (window.speechTranscriber) {
+                    window.speechTranscriber.currentAudioBuffer = [];
+                }
                 if (this.speechRecognitionManager) {
                     this.speechRecognitionManager.start();
                 }
@@ -510,8 +552,11 @@ class VoiceAssistantApp {
             if (result.isFinal) {
                 // 最終結果
                 this.updateInterimTranscription(result.transcript);
-                // 記錄到歷史
-                this.addTranscriptionToResults(result.transcript, new Date());
+                // 記錄到歷史，並傳遞音訊 URL（如果有的話）
+                const audioUrl = this.lastRecordingUrl || null;
+                this.addTranscriptionToResults(result.transcript, new Date(), audioUrl);
+                // 使用後清除暫存的音訊 URL
+                this.lastRecordingUrl = null;
             } else {
                 // 臨時結果
                 this.updateInterimTranscription(result.transcript);
@@ -521,11 +566,8 @@ class VoiceAssistantApp {
         
         // 保持向後相容性（舊格式）
         if (result.clearInterim) {
-            // 清除臨時顯示
-            const interimDiv = document.getElementById('interimTranscription');
-            if (interimDiv) {
-                interimDiv.remove();
-            }
+            // 使用統一的清空方法
+            this.clearInterimDisplay();
             return;
         }
         
@@ -546,18 +588,52 @@ class VoiceAssistantApp {
     
     // 更新即時轉譯（臨時結果）
     updateInterimTranscription(text) {
-        if (!text) return;
-        
-        // 查找或建立臨時顯示區域
-        let interimDiv = document.getElementById('interimTranscription');
-        if (!interimDiv) {
-            interimDiv = document.createElement('div');
-            interimDiv.id = 'interimTranscription';
-            interimDiv.className = 'interim-transcription';
-            this.transcriptionResults.insertBefore(interimDiv, this.transcriptionResults.firstChild);
+        // 只在聆聽狀態時更新即時轉譯
+        if (window.voiceAssistantFSM && window.voiceAssistantFSM.getCurrentState() !== 'Listening') {
+            return;
         }
         
-        interimDiv.textContent = text;
+        const interimContainer = document.getElementById('interimTranscriptionContainer');
+        const interimTextDiv = document.querySelector('#interimTranscription .interim-text');
+        
+        if (!text || text.trim() === '') {
+            // 如果沒有文字但在聆聽狀態，保持容器顯示但清空文字
+            if (interimTextDiv) {
+                interimTextDiv.textContent = '';
+            }
+            return;
+        }
+        
+        // 確保容器是顯示的並更新文字
+        if (interimContainer && interimContainer.style.display === 'none') {
+            interimContainer.style.display = 'block';
+        }
+        if (interimTextDiv) {
+            interimTextDiv.textContent = text;
+        }
+    }
+    
+    // 統一的清空即時轉譯顯示方法
+    clearInterimDisplay() {
+        const interimContainer = document.getElementById('interimTranscriptionContainer');
+        const interimTextDiv = document.querySelector('#interimTranscription .interim-text');
+        const interimDiv = document.getElementById('interimTranscription');
+        
+        // 隱藏容器
+        if (interimContainer) {
+            interimContainer.style.display = 'none';
+        }
+        
+        // 清空所有文字內容
+        if (interimTextDiv) {
+            interimTextDiv.textContent = '';
+        }
+        
+        // 確保清空所有可能的文字元素
+        if (interimDiv) {
+            const textElements = interimDiv.querySelectorAll('.interim-text, .final-text, .text');
+            textElements.forEach(el => el.textContent = '');
+        }
     }
     
     // 移除不再需要的方法
@@ -568,14 +644,19 @@ class VoiceAssistantApp {
         
         if (!fullText || fullText.trim() === '') return;
         
-        // 清除臨時顯示
-        const interimDiv = document.getElementById('interimTranscription');
-        if (interimDiv) {
-            interimDiv.remove();
-        }
+        // 使用統一的清空方法
+        this.clearInterimDisplay();
+        
+        // 使用音訊 URL，如果沒有則嘗試使用最後錄製的音訊
+        const finalAudioUrl = audioUrl || this.lastRecordingUrl || null;
         
         // 建立最終的轉譯項目（包含音訊）
-        this.addTranscriptionToResults(fullText, timestamp, audioUrl);
+        this.addTranscriptionToResults(fullText, timestamp, finalAudioUrl);
+        
+        // 清除暫存的音訊 URL
+        if (this.lastRecordingUrl === finalAudioUrl) {
+            this.lastRecordingUrl = null;
+        }
     }
     
     // 更新串流轉譯（即時最終結果）
@@ -682,66 +763,96 @@ class VoiceAssistantApp {
         // 更新下載按鈕狀態
         this.updateDownloadButtons();
         
+        // 取得歷史記錄容器
+        const historyContainer = document.getElementById('transcriptionHistoryContainer') || this.transcriptionResults;
+        
         // 移除佔位符
-        const placeholder = this.transcriptionResults.querySelector('.placeholder');
+        const placeholder = historyContainer.querySelector('.placeholder');
         if (placeholder) {
             placeholder.remove();
         }
         
-        // 建立新的轉譯項目
+        // 建立新的轉譯項目 - 使用 flex 佈局實現垂直置中
         const item = document.createElement('div');
         item.className = 'transcription-item bg-gray-800 rounded-lg p-4 mb-2';
+        item.style.cssText = 'display: flex; flex-direction: column; gap: 12px;';
         
-        // 如果有音訊，加入播放按鈕
+        // 建立主要內容容器（包含播放按鈕和文字）
+        const contentContainer = document.createElement('div');
+        contentContainer.style.cssText = 'display: flex; align-items: center; gap: 12px;';
+        
+        // 如果有音訊，加入播放按鈕（在左側）
         if (audioUrl) {
             const audioContainer = document.createElement('div');
             audioContainer.className = 'audio-controls';
+            audioContainer.style.cssText = 'display: flex; align-items: center; justify-content: center; flex-shrink: 0;';
             
             const audio = document.createElement('audio');
             audio.src = audioUrl;
             audio.style.display = 'none';
             
             const playBtn = document.createElement('button');
-            playBtn.className = 'play-btn';
-            playBtn.innerHTML = '<i class="fas fa-play"></i>';
+            playBtn.className = 'play-btn bg-blue-600 hover:bg-blue-700 text-white rounded-full transition-all duration-200 transform hover:scale-105';
+            playBtn.style.cssText = 'width: 32px; height: 32px; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; padding: 0; border: none; cursor: pointer; line-height: 0;';
+            playBtn.innerHTML = '<i class="fas fa-play" style="font-size: 12px; line-height: 0;"></i>';
+            playBtn.title = '播放錄音';
+            
             playBtn.onclick = () => {
                 if (audio.paused) {
+                    // 播放
                     audio.play();
-                    playBtn.innerHTML = '<i class="fas fa-pause"></i>';
+                    playBtn.innerHTML = '<i class="fas fa-pause" style="font-size: 12px; line-height: 0;"></i>';
+                    playBtn.title = '暫停';
                 } else {
+                    // 暫停
                     audio.pause();
-                    playBtn.innerHTML = '<i class="fas fa-play"></i>';
+                    playBtn.innerHTML = '<i class="fas fa-play" style="font-size: 12px; line-height: 0;"></i>';
+                    playBtn.title = '播放錄音';
                 }
             };
             
             audio.onended = () => {
-                playBtn.innerHTML = '<i class="fas fa-play"></i>';
+                playBtn.innerHTML = '<i class="fas fa-play" style="font-size: 12px; line-height: 0;"></i>';
+                playBtn.title = '播放錄音';
             };
             
             audioContainer.appendChild(playBtn);
             audioContainer.appendChild(audio);
-            item.appendChild(audioContainer);
+            
+            // 將音訊控制加入內容容器
+            contentContainer.appendChild(audioContainer);
         }
+        
+        // 建立文字內容容器（包含時間戳記和轉譯文字）
+        const textContainer = document.createElement('div');
+        textContainer.style.cssText = 'flex: 1; display: flex; flex-direction: column; gap: 4px;';
         
         // 時間戳記
         const timeDiv = document.createElement('div');
         timeDiv.className = 'timestamp';
+        timeDiv.style.cssText = 'font-size: 11px; color: rgba(156, 163, 175, 0.7);';
         timeDiv.textContent = timestamp.toLocaleTimeString('zh-TW');
+        textContainer.appendChild(timeDiv);
         
-        // 文字內容
+        // 轉譯文字
         const textDiv = document.createElement('div');
         textDiv.className = 'transcription-text text';
+        textDiv.style.cssText = 'color: rgba(229, 231, 235, 1); line-height: 1.6; font-size: 14px;';
         textDiv.textContent = text;
+        textContainer.appendChild(textDiv);
         
-        item.appendChild(timeDiv);
-        item.appendChild(textDiv);
+        // 將文字容器加入內容容器
+        contentContainer.appendChild(textContainer);
         
-        // 插入到最前面
-        this.transcriptionResults.insertBefore(item, this.transcriptionResults.firstChild);
+        // 將內容容器加入項目
+        item.appendChild(contentContainer);
+        
+        // 插入到歷史記錄容器的最前面
+        historyContainer.insertBefore(item, historyContainer.firstChild);
         
         // 限制顯示數量
-        while (this.transcriptionResults.children.length > 20) {
-            this.transcriptionResults.removeChild(this.transcriptionResults.lastChild);
+        while (historyContainer.children.length > 20) {
+            historyContainer.removeChild(historyContainer.lastChild);
         }
     }
     
@@ -939,6 +1050,54 @@ class VoiceAssistantApp {
         osc2.stop(currentTime + 0.2);
     }
     
+    // 建立音訊 URL
+    createAudioUrl(audioChunks) {
+        if (!audioChunks || audioChunks.length === 0) return null;
+        
+        const sampleRate = 16000;
+        let totalLength = audioChunks.reduce((len, chunk) => len + chunk.length, 0);
+        
+        // 合併所有音訊塊
+        let combined = new Float32Array(totalLength);
+        let offset = 0;
+        for (const chunk of audioChunks) {
+            combined.set(chunk, offset);
+            offset += chunk.length;
+        }
+        
+        // 轉換為 16-bit PCM
+        let pcmData = new Int16Array(totalLength);
+        for (let i = 0; i < totalLength; i++) {
+            let s = Math.max(-1, Math.min(1, combined[i]));
+            pcmData[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+        }
+        
+        // 建立 WAV 檔頭
+        const wavHeader = new ArrayBuffer(44);
+        const view = new DataView(wavHeader);
+        const channels = 1;
+        const bitsPerSample = 16;
+        const byteRate = sampleRate * channels * (bitsPerSample / 8);
+        const blockAlign = channels * (bitsPerSample / 8);
+        
+        view.setUint32(0, 0x52494646, false); // "RIFF"
+        view.setUint32(4, 36 + pcmData.byteLength, true);
+        view.setUint32(8, 0x57415645, false); // "WAVE"
+        view.setUint32(12, 0x666d7420, false); // "fmt "
+        view.setUint32(16, 16, true);
+        view.setUint16(20, 1, true);
+        view.setUint16(22, channels, true);
+        view.setUint32(24, sampleRate, true);
+        view.setUint32(28, byteRate, true);
+        view.setUint16(32, blockAlign, true);
+        view.setUint16(34, bitsPerSample, true);
+        view.setUint32(36, 0x64617461, false); // "data"
+        view.setUint32(40, pcmData.byteLength, true);
+        
+        const wavBlob = new Blob([view, pcmData], { type: 'audio/wav' });
+        return URL.createObjectURL(wavBlob);
+    }
+    
     // 播放結束收音音效（下降音調）
     playEndSound() {
         if (!this.audioContext) return;
@@ -1109,13 +1268,17 @@ class VoiceAssistantApp {
     }
     
     // 切換到即時模式
-    switchToStreamingMode() {
+    async switchToStreamingMode() {
         // 如果批次錄音正在進行，先停止它
         if (this.isRecording) {
             console.log('停止批次錄音以切換到即時模式');
-            this.stopBatchRecording();
+            await this.stopBatchRecording();
+            
+            // 等待一小段時間確保停止完成
+            await new Promise(resolve => setTimeout(resolve, 100));
         }
         
+        // 確保停止完成後再更新 UI
         // 更新按鈕樣式
         this.streamingModeBtn?.classList.add('bg-gradient-to-r', 'from-blue-500', 'to-blue-600', 'text-white');
         this.streamingModeBtn?.classList.remove('text-gray-600', 'dark:text-gray-400');
@@ -1169,16 +1332,49 @@ class VoiceAssistantApp {
             waveformTitle.setAttribute('data-i18n', 'ui.microphoneWaveform');
             waveformTitle.textContent = window.i18n?.t('ui.microphoneWaveform') || '麥克風音波';
         }
+        
+        // 重新初始化視覺化（如果系統正在運行）
+        setTimeout(() => {
+            // 調整 canvas 大小
+            if (window.visualizer) {
+                window.visualizer.resizeCanvases();
+                
+                // 如果音訊正在運行，重新啟動視覺化
+                if (this.audioContext && this.audioPipeline?.isInitialized) {
+                    window.visualizer.start();
+                    console.log('重新啟動視覺化器');
+                }
+            }
+        }, 100); // 給 DOM 一點時間完成更新
     }
     
     // 切換到批次模式
-    switchToBatchMode() {
+    async switchToBatchMode() {
         // 如果即時模式正在運行，先停止它
         if (this.stopBtn && !this.stopBtn.disabled) {
             console.log('停止即時語音服務以切換到批次模式');
-            this.stop(); // 停止所有音訊處理和語音識別
+            
+            // 先停止所有音訊處理和語音識別
+            await this.stop();
+            
+            // 等待一小段時間確保停止完成
+            await new Promise(resolve => setTimeout(resolve, 100));
+            
+            // 清理即時轉譯的臨時內容
+            this.clearInterimDisplay();
+            
+            // 重置 FSM 狀態（如果有 reset 方法的話）
+            if (window.voiceAssistantFSM) {
+                if (window.voiceAssistantFSM.reset) {
+                    window.voiceAssistantFSM.reset();
+                } else {
+                    // 如果沒有 reset 方法，至少確保停止狀態
+                    window.voiceAssistantFSM.stop();
+                }
+            }
         }
         
+        // 確保停止完成後再更新 UI
         // 更新按鈕樣式
         this.batchModeBtn?.classList.add('bg-gradient-to-r', 'from-blue-500', 'to-blue-600', 'text-white');
         this.batchModeBtn?.classList.remove('text-gray-600', 'dark:text-gray-400');
@@ -1197,6 +1393,12 @@ class VoiceAssistantApp {
         if (streamingVisualization) {
             streamingVisualization.style.display = 'none';
         }
+        
+        // 停止視覺化（節省資源）
+        if (window.visualizer) {
+            window.visualizer.stop();
+        }
+        
         // 顯示批次模式的上傳面板
         if (batchUploadPanel) {
             batchUploadPanel.style.display = 'flex'; // 使用 flex 以填滿高度
@@ -1286,7 +1488,7 @@ class VoiceAssistantApp {
         
         // 錄音按鈕
         this.recordBtn?.addEventListener('click', () => this.startBatchRecording());
-        this.stopRecordBtn?.addEventListener('click', () => this.stopBatchRecording());
+        this.stopRecordBtn?.addEventListener('click', async () => await this.stopBatchRecording());
         
         // 引擎選擇 (改為 radio buttons)
         const engineRadios = document.querySelectorAll('input[name="engineSelect"]');
@@ -1877,7 +2079,7 @@ class VoiceAssistantApp {
     }
     
     // 停止批次錄音
-    stopBatchRecording() {
+    async stopBatchRecording() {
         if (this.mediaRecorder && this.isRecording) {
             this.mediaRecorder.stop();
             this.isRecording = false;

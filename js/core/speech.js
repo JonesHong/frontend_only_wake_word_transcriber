@@ -55,6 +55,7 @@ class SpeechTranscriber {
             this.isListening = true;
             this.sessionId = Date.now(); // 新的會話 ID
             this.currentTranscript = ''; // 重置當前轉譯
+            // 保留音訊緩衝區，不在這裡重置
         };
         
         // 結束事件
@@ -153,7 +154,8 @@ class SpeechTranscriber {
             try {
                 this.recognition.start();
                 this.currentTranscript = '';
-                this.currentAudioBuffer = [];
+                // 不要在這裡清空音訊緩衝區，讓它保留從 main.js 收集的音訊
+                // this.currentAudioBuffer = [];
                 return true;
             } catch (error) {
                 console.error('啟動語音識別失敗:', error);
